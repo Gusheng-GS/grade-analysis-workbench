@@ -100,11 +100,15 @@ It fabricates 40 students (学生01…学生40), an example school and three mon
 
 ## 3. For teachers: unzip and run (Windows)
 
-Download **`成绩分析工作台-v0.1.0-windows-x64.zip`** (≈192 MB) from [Releases](../../releases/latest), unzip it, and double-click **`启动.bat`** ("start"); the browser opens the UI at `http://127.0.0.1:3080/`.
+Download **`grade-analysis-workbench-v0.1.0-windows-x64.zip`** (≈192 MB) from [Releases](../../releases/latest), unzip it, and double-click **`启动.bat`** ("start"); the browser opens the UI at `http://127.0.0.1:3080/`.
 
 - No Node.js, Python or database is required — the runtime is bundled.
 - To stop: double-click `停止.bat` ("stop"). It only kills whatever listens on port 3080, nothing else.
 - Detailed instructions: `使用说明.txt` next to the executable (Chinese only, deliberately free of technical jargon).
+
+> **Why is the download filename in ASCII?** GitHub silently strips non-ASCII characters from release
+> asset names (the original would have arrived as `-v0.1.0-windows-x64.zip`), so the archive is named in
+> ASCII from the start. Nothing else changes — **the folder you get after extracting is still 成绩分析工作台**.
 
 **Two hurdles you will probably hit first:**
 

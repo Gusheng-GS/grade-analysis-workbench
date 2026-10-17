@@ -8,11 +8,15 @@
   2. 附上 licenses/ 里的第三方许可证原文，以及 LICENSE / NOTICE / THIRD-PARTY-NOTICES.md
      —— 因为发布包里含有 DSH、Node.js、libvips 等第三方二进制，再分发必须带许可证
   3. 打完自检：结构、关键文件、路径长度、真名 / 本机路径 / 账号泄漏、sha256
+  4. zip 的文件名用 ASCII（--slug），包内的文件夹名仍是中文（--name）
+     —— GitHub Release 会悄悄去掉附件名里的非 ASCII 字符：
+        `成绩分析工作台-v0.1.0-windows-x64.zip` 上传后会变成 `-v0.1.0-windows-x64.zip`。
+        所以下载文件名从源头就用 ASCII，包内解压出来的文件夹名不受影响。
 
 用法：
     python data/make_release_zip.py
     python data/make_release_zip.py --src "D:\\某处\\DSH成绩分析工作台"
-    python data/make_release_zip.py --name 成绩分析工作台 --version 0.1.0
+    python data/make_release_zip.py --name 成绩分析工作台 --slug grade-analysis-workbench --version 0.1.0
 
 不复制那个几百 MB 的目录：直接读源目录，按新名字写进 zip。
 """
@@ -173,7 +177,12 @@ def collect(src, name, new_exe):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", default=None, help="构建出来的成品目录（默认自动找）")
-    ap.add_argument("--name", default="成绩分析工作台", help="发布用软件名")
+    ap.add_argument("--name", default="成绩分析工作台",
+                    help="发布用软件名：决定 zip 内文件夹名与启动器 exe 名（可以是中文）")
+    ap.add_argument("--slug", default="grade-analysis-workbench",
+                    help="zip 文件名前缀，只用 ASCII。GitHub Release 会把附件名里的非 ASCII 字符去掉"
+                         "（中文会整个消失，只剩一个连字符），所以下载文件名必须用 ASCII；"
+                         "包内文件夹名仍由 --name 决定")
     ap.add_argument("--version", default="0.1.0")
     ap.add_argument("--outdir", default=None)
     args = ap.parse_args()
@@ -186,10 +195,11 @@ def main():
     root = os.path.dirname(os.path.abspath(src))
     outdir = args.outdir or os.path.join(root, "build")
     os.makedirs(outdir, exist_ok=True)
-    out = os.path.join(outdir, "%s-v%s-windows-x64.zip" % (name, args.version))
+    out = os.path.join(outdir, "%s-v%s-windows-x64.zip" % (args.slug, args.version))
 
     print("源目录: %s" % src)
     print("发布名: %s  v%s" % (name, args.version))
+    print("下载文件名: %s（ASCII，因为 GitHub 会去掉附件名里的中文）" % os.path.basename(out))
     print()
 
     items, n_rewrite = collect(src, name, new_exe)

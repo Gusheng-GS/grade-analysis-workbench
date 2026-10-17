@@ -85,11 +85,15 @@ python data\make_demo_page.py     # 生成 成绩分析工作台-演示版.html
 
 ## 三、给老师：解压即用（Windows）
 
-去 [Releases](../../releases/latest) 下载 **`成绩分析工作台-v0.1.0-windows-x64.zip`**（约 192 MB），解压后双击 **`启动.bat`**，浏览器会自动打开界面（`http://127.0.0.1:3080/`）。
+去 [Releases](../../releases/latest) 下载 **`grade-analysis-workbench-v0.1.0-windows-x64.zip`**（约 192 MB），解压后双击 **`启动.bat`**，浏览器会自动打开界面（`http://127.0.0.1:3080/`）。
 
 - 不需要装 Node、Python、数据库；压缩包里已经带好运行环境
 - 关闭：双击 `停止.bat`（只结束占用 3080 端口的进程，不动别的程序）
 - 详细说明：解压后同目录的 `使用说明.txt`（全中文、无技术术语）
+
+> **下载文件名为什么是英文的？** GitHub 会悄悄去掉 Release 附件名里的中文字符
+> （原名会变成 `-v0.1.0-windows-x64.zip`），所以从源头就用 ASCII 命名。
+> 不影响使用——**解压出来的文件夹仍然叫「成绩分析工作台」**。
 
 **两个常见的第一道坎：**
 

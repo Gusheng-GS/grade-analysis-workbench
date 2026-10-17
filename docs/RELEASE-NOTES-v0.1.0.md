@@ -16,8 +16,11 @@
 
 | 文件 | 说明 |
 |---|---|
-| `成绩分析工作台-v0.1.0-windows-x64.zip`（约 192 MB） | **完整包**。解压即用，不需要另装 Node、Python 或任何依赖 |
-| 源码 | 就是本仓库。想自己构建请读 [`项目结构说明.md`](../blob/main/项目结构说明.md) |
+| `grade-analysis-workbench-v0.1.0-windows-x64.zip`（约 192 MB） | **完整包**。解压即用，不需要另装 Node、Python 或任何依赖 |
+| 源码 | 就是本仓库。想自己构建请读 [`项目结构说明.md`](https://github.com/Gusheng-GS/grade-analysis-workbench/blob/main/项目结构说明.md) |
+
+> 文件名用英文，是因为 GitHub 会去掉 Release 附件名里的中文字符。
+> 解压出来的文件夹仍然叫「成绩分析工作台」，双击其中的 `启动.bat` 即可。
 
 ## 怎么用
 
@@ -84,7 +87,7 @@ Key 只存在你本机浏览器里，程序不会把它上传到任何地方。
 ## 校验
 
 ```
-文件名  成绩分析工作台-v0.1.0-windows-x64.zip
+文件名  grade-analysis-workbench-v0.1.0-windows-x64.zip
 大小    201790060 字节（192.4 MB）
 SHA-256 e0bbe15a9e1d8562f794b4968c8c8a12cbbbef087cc975633fea98e72e11e524
 ```
@@ -92,7 +95,7 @@ SHA-256 e0bbe15a9e1d8562f794b4968c8c8a12cbbbef087cc975633fea98e72e11e524
 Windows 上核对方法（PowerShell）：
 
 ```powershell
-Get-FileHash "成绩分析工作台-v0.1.0-windows-x64.zip" -Algorithm SHA256
+Get-FileHash "grade-analysis-workbench-v0.1.0-windows-x64.zip" -Algorithm SHA256
 ```
 
 ## 已知限制
@@ -111,5 +114,5 @@ Get-FileHash "成绩分析工作台-v0.1.0-windows-x64.zip" -Algorithm SHA256
 
 ## 从源码构建
 
-见仓库里的 [`项目结构说明.md`](../blob/main/项目结构说明.md)：装好 Node 与 Python 后执行
+见仓库里的 [`项目结构说明.md`](https://github.com/Gusheng-GS/grade-analysis-workbench/blob/main/项目结构说明.md)：装好 Node 与 Python 后执行
 `python data\bootstrap.py` 会自动从 npm 拉取 DSH 并组装出可运行的目录。

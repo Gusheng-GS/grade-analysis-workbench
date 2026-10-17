@@ -1,0 +1,17 @@
+{
+  "name": "grade-analysis-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "成绩分析工作台：把五岳阅卷导出的成绩变成可执行的补弱方案（前端单页 + DS H 外壳）",
+  "license": "Apache-2.0",
+  "scripts": {
+    "fixtures": "node data/fixtures/make_sample_data.js",
+    "data": "python data/gen_home_data.py",
+    "build:page": "python data/gen_home_html.py",
+    "test": "node data/test_parse_parity.js && node data/test_merge_exam.js && node data/test_import_e2e.js && node data/test_features_e2e.js && node data/test_api_settings_e2e.js && node data/test_multi_exam_e2e.js && node data/test_charts_e2e.js"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2",
+    "xlsx": "0.18.5"
+  }
+}

@@ -1,0 +1,26 @@
+# 换行与二进制处理规则
+#
+# 这个仓库里有两类特殊文件：
+#   · 由脚本生成的 .html / .json（Windows 上写出来是 CRLF）
+#   · png / xlsx 等二进制
+# 其余是普通文本。下面把规则写清楚，免得 clone 到别的机器上行为不一样。
+
+# 批处理：如果将来把 .bat 放进仓库，务必原样保存 ——
+# 它们是 GBK 编码 + CRLF 换行，cmd 对 LF 换行不可靠，任何转换都可能让它们跑不起来。
+*.bat          -text
+*.cmd          -text
+
+# 二进制：不做任何转换
+*.png          binary
+*.jpg          binary
+*.jpeg         binary
+*.gif          binary
+*.ico          binary
+*.xlsx         binary
+*.zip          binary
+*.exe          binary
+
+# 普通文本：仓库里统一存 LF（提交时自动把 CRLF 归一化为 LF）。
+# 注意 —— 这只影响"仓库里存的格式"和"clone 时写出来的格式"，
+# 不会改动你工作目录里已经存在的文件；`git status` 也不会因此显示假改动。
+*              text=auto eol=lf

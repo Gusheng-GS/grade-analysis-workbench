@@ -1,0 +1,16 @@
+成绩分析工作台（Grade Analysis Workbench）
+Copyright 2026 成绩分析工作台 贡献者
+
+本作品按 Apache License 2.0 授权，全文见同目录 LICENSE。
+
+本作品包含或依赖以下第三方软件：
+
+1. SheetJS Community Edition（本仓库内的 xlsx.full.min.js）
+   Copyright (c) 2013-present SheetJS LLC
+   Licensed under the Apache License, Version 2.0
+
+2. 以下软件在构建时安装、**不随本仓库分发**：
+   - DeepSeek Harness（@deepseek-ai/dsh）— MIT License，Copyright (c) 2026 DeepSeek
+   - @deepseek-ai/dsh-web-frontend — BSD-3-Clause
+   - Node.js 运行时 — MIT License，Copyright Node.js contributors
+   它们的许可证与更多细节见 THIRD-PARTY-NOTICES.md。

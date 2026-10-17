@@ -1,0 +1,25 @@
+# ── 构建产物（由 data/bootstrap.py 生成，体积大、可重建，不进版本库）──
+DSH成绩分析工作台/
+build/
+*.zip
+
+# ── 依赖 ──
+node_modules/
+
+# ── Python / 临时 ──
+__pycache__/
+*.pyc
+*.log
+
+# ── 生成的数据文件 ──
+# 说明：data/home_data.json 是由 gen_home_data.py 从 fixtures 生成的**合成样例**，
+# 为了让拉下来就能跑测试，它是提交的（内容不含任何真实学生信息）。
+
+# ── 截图用演示页的中间产物（由 data/make_demo_page.py 生成，可随时重建）──
+data/demo_home_data.json
+data/demo_exams_seed.json
+成绩分析工作台-演示版.html
+
+# ── 本地环境 ──
+.env
+.venv/

@@ -40,6 +40,11 @@ REWRITE_BAT = "启动.bat"
 REWRITE_TXT = "使用说明.txt"
 EXTRA = ["LICENSE", "NOTICE", "THIRD-PARTY-NOTICES.md"]   # 从仓库搬进发布包
 
+# 程序运行时自己要用、必须放在包根目录（和 exe 同级）的两个文件：
+#   update_agent.js —— 设置里「检查更新」的下载代理，启动器会拉起它
+#   version.txt     —— 版本号（启动器读它，页面里也嵌一份）
+EXTRA_FROM_DATA = ["update_agent.js", "version.txt"]
+
 BOM = b"\xef\xbb\xbf"
 
 
@@ -158,6 +163,13 @@ def collect(src, name, new_exe):
                 continue
             items.append((p, arc, None))
 
+    # data/ 下的运行时文件（版本号、更新代理）
+    for fname in EXTRA_FROM_DATA:
+        p2 = os.path.join(REPO, "data", fname)
+        if not os.path.isfile(p2):
+            raise SystemExit("仓库里缺少 data/" + fname)
+        items.append((p2, name + "/" + fname, None))
+
     for fname in EXTRA:
         p = os.path.join(REPO, fname)
         if not os.path.isfile(p):
@@ -235,6 +247,7 @@ def main():
                 name + "/update/_workbench.html", name + "/update/xlsx.full.min.js",
                 name + "/app-0.2.1/node_modules/@deepseek-ai/dsh/lib/bin.js",
                 name + "/LICENSE", name + "/NOTICE", name + "/THIRD-PARTY-NOTICES.md",
+                name + "/update_agent.js", name + "/version.txt",
                 name + "/licenses/README.txt", name + "/licenses/Apache-2.0.txt",
                 name + "/licenses/LGPL-3.0.txt", name + "/licenses/GPL-3.0.txt",
                 name + "/licenses/MPL-2.0.txt", name + "/licenses/MIT-Node.js.txt"]

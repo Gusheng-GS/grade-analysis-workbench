@@ -1,4 +1,4 @@
-﻿// DSH 成绩分析工作台 · 启动器
+// DSH 成绩分析工作台 · 启动器
 //
 // 用户动作：双击本 exe
 // 期望结果：等几秒后浏览器自动打开 WebUI，中间不出现黑色命令行窗口
@@ -41,6 +41,15 @@ static class Program
 
     private static int port = DefaultPort;
     private static string logPath;
+
+    // ── 更新代理（update_agent.js）──
+    // 浏览器没法把文件写进程序目录，所以下载交给一个本地小进程做：
+    // 启动器用随机端口把它拉起来，并把"端口 + 一次性 token + 版本号"注入到页面里。
+    private const int AgentPortFrom = 30990;
+    private const int AgentPortTo = 31010;
+    private static string agentToken = Guid.NewGuid().ToString("N");
+    private static int agentPort = 0;
+    private static Process agentProc = null;
 
     [STAThread]
     static void Main(string[] args)
@@ -123,6 +132,12 @@ static class Program
             return;
         }
 
+        // 更新代理的端口每次启动都重新挑（页面里注入的 token 也随之换新）。
+        // 必须在启动 node 之前定好，因为下面要把它注入 index.html。
+        agentPort = FindFreePort(AgentPortFrom, AgentPortTo);
+        if (agentPort == 0) Log("没有空闲端口，自动更新不可用");
+        IntegrateWorkbench(baseDir, appDir);
+
         Form splash = BuildSplash();
         splash.Show();
         splash.Refresh();
@@ -189,6 +204,10 @@ static class Program
 
             Log("服务已就绪，浏览器应由 dsh 自动打开");
             UpdateSplash(splash, "启动成功！\r\n\r\n浏览器正在打开，请稍候…");
+
+            // 拉起更新代理（失败不影响使用：页面上的"检查更新"会退化成去发布页手动下载）
+            StartUpdateAgent(baseDir);
+
             Thread.Sleep(2500);   // 留出 dsh 打开浏览器的时间
             splash.Close();
             Log("=== 启动完成 ===");
@@ -270,6 +289,85 @@ static class Program
     }
 
     static string Quote(string s) { return "\"" + s + "\""; }
+
+    /// <summary>
+    /// 给"目录路径"加引号：Windows 命令行里 "C:\dir\" 的结尾反斜杠会把引号转义掉，
+    /// 所以路径以 \ 结尾时补一个 \，变成 "C:\dir\\"。
+    /// </summary>
+    static string QuoteDir(string p)
+    {
+        if (p.EndsWith("\\")) p = p + "\\";
+        return "\"" + p + "\"";
+    }
+
+    // ── 更新代理 ──────────────────────────────────────────────
+
+    /// <summary>读程序版本号（version.txt，由打包脚本放进交付目录）；读不到就用 0.0.0。</summary>
+    static string AppVersion(string baseDir)
+    {
+        try
+        {
+            string p = Path.Combine(baseDir, "version.txt");
+            if (File.Exists(p)) return File.ReadAllText(p).Trim();
+        }
+        catch { }
+        return "0.0.0";
+    }
+
+    /// <summary>在给定范围里找一个空闲的本机端口（挑不到就返回 0）。</summary>
+    static int FindFreePort(int from, int to)
+    {
+        for (int p = from; p <= to; p++)
+        {
+            try
+            {
+                var l = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, p);
+                l.Start();
+                l.Stop();
+                return p;
+            }
+            catch { }
+        }
+        return 0;
+    }
+
+    /// <summary>
+    /// 拉起本地更新代理。它只做一件事：把 GitHub 上的安装包下载到 update\ 目录，
+    /// 真正的安装仍然由下次启动时的 ApplyUpdate 完成。
+    /// </summary>
+    static void StartUpdateAgent(string baseDir)
+    {
+        try
+        {
+            string agent = Path.Combine(baseDir, "update_agent.js");
+            if (!File.Exists(agent)) { Log("没有 update_agent.js，自动更新不可用（页面会提示手动下载）"); return; }
+
+            string nodeExe = Path.Combine(baseDir, "runtime", "node.exe");
+            if (!File.Exists(nodeExe)) { Log("缺少 runtime\\node.exe，自动更新不可用"); return; }
+
+            if (agentPort == 0) { Log("没有空闲端口，自动更新不可用"); return; }
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = nodeExe,
+                Arguments = Quote(agent) + " --home " + QuoteDir(baseDir) +
+                            " --port " + agentPort +
+                            " --token " + agentToken +
+                            " --app-port " + port,
+                WorkingDirectory = baseDir,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            agentProc = Process.Start(psi);
+            Log("更新代理已启动 端口=" + agentPort + " PID=" + (agentProc == null ? "null" : agentProc.Id.ToString()));
+            Log("程序版本: " + AppVersion(baseDir));
+        }
+        catch (Exception ex)
+        {
+            Log("启动更新代理失败: " + ex.Message);
+        }
+    }
 
     // ── 更新功能 ──────────────────────────────────────────────
 
@@ -532,6 +630,8 @@ static class Program
             string build = ((long)(DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds).ToString();
 
             string body =
+                "\n  <script>window.__WB_UPDATER__={agent:'http://127.0.0.1:" + agentPort + "',token:'" + agentToken +
+                "',version:'" + AppVersion(baseDir) + "',repo:'Gusheng-GS/grade-analysis-workbench'};</script>\n" +
                 "\n  <iframe id=\"workbench-layer\" src=\"./_workbench.html?v=" + build + "\" title=\"成绩分析工作台\"></iframe>\n" +
                 "  <button id=\"wb-toggle\"><span class=\"dot\"></span><span id=\"wb-toggle-label\">切到 DSH 界面</span></button>\n" +
                 "  <script>(function(){var K='wb-show-workbench',r=document.documentElement,l=document.getElementById('wb-toggle-label');" +

@@ -66,6 +66,10 @@ else:
 
 DATA_JSON = json.dumps(payload, ensure_ascii=False)
 
+# 产品版本号（不是 DSH 的版本）：唯一来源是 data/version.txt
+with open(os.path.join(BASE, "version.txt"), encoding="utf-8") as f:
+    APP_VERSION = f.read().strip()
+
 HTML = r"""<!doctype html>
 <html lang="zh-CN" data-theme="light">
 <head>
@@ -1059,6 +1063,7 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
       <button class="tab" data-tab="model">模型</button>
       <button class="tab" data-tab="privacy">隐私</button>
       <button class="tab" data-tab="data">数据</button>
+      <button class="tab" data-tab="update">更新</button>
       <button class="tab" data-tab="about">关于</button>
     </div>
     <div class="dialog-body">
@@ -1231,27 +1236,6 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
             style="color:var(--danger);border-color:var(--danger)">清空全部数据并重置</button>
         </div>
 
-        <div class="field">
-          <label>程序更新</label>
-          <div class="desc">
-            当前版本：<b data-app-version>0.2.1-alpha.1</b>（内置工作台 v6）<br>
-            浏览器不能直接安装更新，所以更新由<b>启动器</b>完成，操作只有一步：
-          </div>
-          <div class="keylist" style="margin:8px 0">
-            <div class="keyrow"><span class="kn">第 1 步</span><span class="kv">把更新压缩包（.zip）放进程序目录下的 <b>update</b> 文件夹</span></div>
-            <div class="keyrow"><span class="kn">第 2 步</span><span class="kv">关掉正在运行的服务，重新双击程序图标</span></div>
-            <div class="keyrow"><span class="kn">第 3 步</span><span class="kv">启动器会自动解压、覆盖安装、重新集成工作台，完成后提示重启</span></div>
-          </div>
-          <div class="desc" style="color:var(--warn)">
-            ⚠ 更新包格式：压缩包里要包含 <b>app</b> 文件夹（也就是 node_modules 那一层）。
-            更新采用覆盖方式，建议更新前把整个程序文件夹复制一份留底。
-          </div>
-          <div class="row" style="margin-top:8px">
-            <button class="tbtn" id="pickUpdateZipBtn">我拿到了更新包，放到 update 文件夹</button>
-            <span style="font-size:11px;color:var(--text-3)" id="updatePickHint"></span>
-          </div>
-          <input type="file" id="updateZipInput" accept=".zip" style="display:none" />
-        </div>
 
         <div class="field">
           <label>数据文件位置</label>
@@ -1259,6 +1243,64 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
             程序保存在浏览器的 localStorage 中（键名 <code>dsh-grade-workbench-v6</code>）。<br>
             如果想彻底清掉，也可以在浏览器里按 F12 → Application → Local Storage → 删除该键。
           </div>
+        </div>
+      </div>
+
+      <div class="tabpane" data-pane="update">
+        <div class="field">
+          <label>当前版本</label>
+          <div class="desc">
+            <b id="updCurrent">—</b>　·　内置 DSH 外壳 <b data-app-version>0.2.1-alpha.1</b>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>检查更新</label>
+          <div class="desc">
+            和 GitHub 上的最新发布版比对。这一步只会向 GitHub 问"最新版是几号"，
+            <b>不会上传任何成绩数据</b>。
+          </div>
+          <div class="row" style="margin-top:8px;align-items:center">
+            <button class="tbtn primary" id="updCheckBtn">检查更新</button>
+            <span id="updStatus" style="font-size:12px;color:var(--text-2)"></span>
+          </div>
+
+          <div id="updLatest" style="display:none;margin-top:12px">
+            <div class="keylist">
+              <div class="keyrow"><span class="kn">最新版本</span><span class="kv" id="updLatestVer">—</span></div>
+              <div class="keyrow"><span class="kn">安装包</span><span class="kv" id="updLatestAsset">—</span></div>
+              <div class="keyrow"><span class="kn">发布时间</span><span class="kv" id="updLatestDate">—</span></div>
+            </div>
+            <div class="desc" id="updNotes"
+              style="white-space:pre-wrap;max-height:110px;overflow:auto;margin-top:8px;color:var(--text-3);font-size:12px"></div>
+            <div class="row" style="margin-top:10px;align-items:center">
+              <button class="tbtn primary" id="updDownloadBtn">下载并更新</button>
+              <span style="font-size:11px;color:var(--text-3)">下载在后台进行，可以关掉这个窗口继续工作</span>
+            </div>
+          </div>
+
+          <div id="updProgressWrap" style="display:none;margin-top:12px">
+            <div class="desc" id="updProgressText">准备下载…</div>
+            <div style="height:6px;background:var(--bg-subtle);border-radius:3px;overflow:hidden;margin-top:6px">
+              <div id="updProgressBar" style="height:100%;width:0;background:var(--accent);transition:width .2s"></div>
+            </div>
+            <div class="desc" id="updDoneHint" style="display:none;color:var(--ok);margin-top:8px"></div>
+            <div class="desc" id="updErrHint" style="display:none;color:var(--danger);margin-top:8px"></div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>手动更新（备选）</label>
+          <div class="desc">
+            自动更新走不通时（例如这台电脑连不上 GitHub）：去发布页下载 zip，
+            把它放进程序目录的 <code>update</code> 文件夹，再重启程序，启动器会自动安装。
+          </div>
+          <div class="row" style="margin-top:8px;align-items:center">
+            <button class="tbtn" id="updOpenPageBtn">打开发布页</button>
+            <button class="tbtn" id="pickUpdateZipBtn">校验我下载的 zip</button>
+            <span id="updatePickHint" style="font-size:11px;color:var(--text-3)"></span>
+          </div>
+          <input type="file" id="updateZipInput" accept=".zip" style="display:none" />
         </div>
       </div>
 
@@ -4199,6 +4241,7 @@ document.querySelectorAll('.tab').forEach(t => {
   t.onclick = () => {
     document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
     document.querySelectorAll('.tabpane').forEach(p => p.classList.toggle('on', p.dataset.pane === t.dataset.tab));
+    if (t.dataset.tab === 'update' && typeof updInit === 'function') updInit();
   };
 });
 
@@ -4627,8 +4670,208 @@ document.getElementById('backupFileInput').onchange = e => {
   e.target.value = '';   // 同一个文件再选一次也要能触发
 };
 
-/* ── 程序更新入口 ──
-   浏览器装不了更新，这里做的是"确认包没问题 + 告诉你放哪里"。 */
+/* ── 程序更新 ──
+   浏览器没法把文件写进程序目录，所以分工是：
+     页面  = 问 GitHub"最新版是几号"、比版本、显示界面
+     代理  = 真正下载（启动器拉起的 update_agent.js），下到 update\ 里
+     启动器 = 下次启动时 ApplyUpdate 自动安装并重新注入界面
+   代理地址与 token 由启动器注入到 window.parent.__WB_UPDATER__，别的网站拿不到。 */
+const APP_VERSION = __APP_VERSION__;
+
+function updCfg() {
+  try { return (window.parent && window.parent.__WB_UPDATER__) || null; } catch (e) { return null; }
+}
+const UPD = updCfg();
+const UPD_REPO = (UPD && UPD.repo) || 'Gusheng-GS/grade-analysis-workbench';
+const UPD_PAGE = 'https://github.com/' + UPD_REPO + '/releases/latest';
+
+let updLatest = null;        // 最新版信息
+let updTimer = null;         // 进度轮询
+let updAgentOk = false;
+let updInited = false;
+
+function updCurVersion() { return (UPD && UPD.version) || APP_VERSION; }
+
+function updSemver(t) {
+  const m = String(t || '').match(/(\d+)\.(\d+)\.(\d+)/);
+  return m ? [+m[1], +m[2], +m[3]] : [0, 0, 0];
+}
+function updIsNewer(a, b) {                       // a 比 b 新？
+  const x = updSemver(a), y = updSemver(b);
+  for (let i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] > y[i]; }
+  return false;
+}
+function updSize(n) {
+  if (!n) return '—';
+  return n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB';
+}
+function updText(id, t, color) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = t || '';
+  if (color) el.style.color = color;
+}
+
+/* 设置窗口关着也要能看到结果 → 底部弹一个可点掉的小条 */
+function updToast(text, isErr) {
+  let t = document.getElementById('updToast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'updToast';
+    t.style.cssText = 'position:fixed;left:18px;bottom:18px;z-index:2147483600;max-width:430px;' +
+      'padding:12px 14px;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18);' +
+      'font:13px/1.6 "Segoe UI","Microsoft YaHei UI",system-ui,sans-serif;cursor:pointer';
+    t.title = '点一下关掉';
+    t.onclick = () => t.remove();
+    document.body.appendChild(t);
+  }
+  t.style.background = isErr ? '#fdecea' : '#e8f5e9';
+  t.style.color = isErr ? '#c42b1c' : '#0e700e';
+  t.style.border = '1px solid ' + (isErr ? '#f5c6c2' : '#b7dfb9');
+  t.textContent = text;
+  clearTimeout(t._hide);
+  t._hide = setTimeout(() => { try { t.remove(); } catch (e) {} }, isErr ? 20000 : 15000);
+}
+
+function updInit() {
+  updInited = true;
+  updText('updCurrent', updCurVersion());
+  if (!UPD) {
+    const b = document.getElementById('updCheckBtn');
+    if (b) b.disabled = true;
+    updText('updStatus', '自动更新只在「启动.bat」打开的程序里可用（当前页面没有启动器）', 'var(--warn)');
+    return;
+  }
+  fetch(UPD.agent + '/status', { headers: { 'X-WB-Token': UPD.token } })
+    .then(r => r.json())
+    .then(o => {
+      updAgentOk = !!(o && o.ok);
+      if (!updAgentOk) updText('updStatus', '本机更新服务没响应，可以改用下面的手动更新', 'var(--warn)');
+      // 上次已经下完的（或正在下的），进来就接着显示
+      if (o && o.download && (o.download.done || o.download.busy)) updPoll();
+    })
+    .catch(() => {
+      updAgentOk = false;
+      updText('updStatus', '本机更新服务没响应，可以改用下面的手动更新', 'var(--warn)');
+    });
+}
+
+async function updCheck() {
+  const btn = document.getElementById('updCheckBtn');
+  btn.disabled = true;
+  updText('updStatus', '正在向 GitHub 查询最新版本…');
+  updText('updCurrent', updCurVersion());
+  try {
+    const r = await fetch('https://api.github.com/repos/' + UPD_REPO + '/releases/latest',
+      { headers: { 'Accept': 'application/vnd.github+json' } });
+    if (r.status === 404) throw new Error('仓库还没有发布版');
+    if (!r.ok) throw new Error('HTTP ' + r.status + '（GitHub 可能限流，稍后再试）');
+    const rel = await r.json();
+    const asset = (rel.assets || []).filter(a => /\.zip$/i.test(a.name))[0];
+    if (!asset) throw new Error('这个发布版里没有 zip 包');
+
+    updLatest = {
+      version: String(rel.tag_name || '').replace(/^v/i, ''),
+      date: rel.published_at ? rel.published_at.slice(0, 10) : '',
+      notes: rel.body || '',
+      assetName: asset.name,
+      assetSize: asset.size,
+      url: asset.browser_download_url,
+    };
+
+    const cur = updCurVersion();
+    if (!updIsNewer(updLatest.version, cur)) {
+      document.getElementById('updLatest').style.display = 'none';
+      updText('updStatus', '已是最新版（' + cur + '）', 'var(--ok)');
+      return;
+    }
+
+    updText('updStatus', '发现新版本，可以更新', 'var(--accent)');
+    updText('updLatestVer', 'v' + updLatest.version + '（当前 v' + cur + '）');
+    updText('updLatestAsset', updLatest.assetName + '　' + updSize(updLatest.assetSize));
+    updText('updLatestDate', updLatest.date || '—');
+    const notes = document.getElementById('updNotes');
+    notes.textContent = (updLatest.notes || '').split('\n').slice(0, 12).join('\n');
+    document.getElementById('updLatest').style.display = '';
+    document.getElementById('updDownloadBtn').disabled = false;
+  } catch (e) {
+    updText('updStatus', '检查失败：' + e.message + '（也可以点下面的「打开发布页」）', 'var(--danger)');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function updStart() {
+  if (!updLatest) return;
+  if (!UPD || !updAgentOk) { window.open(UPD_PAGE, '_blank'); return; }
+  const btn = document.getElementById('updDownloadBtn');
+  btn.disabled = true;
+  updText('updStatus', '正在交给本机更新服务下载…');
+  try {
+    const r = await fetch(UPD.agent + '/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-WB-Token': UPD.token },
+      body: JSON.stringify({ url: updLatest.url, name: updLatest.assetName }),
+    });
+    const o = await r.json().catch(() => ({}));
+    if (!r.ok || !o.ok) throw new Error(o.error || ('HTTP ' + r.status));
+    updPoll();
+    updToast('开始下载 v' + updLatest.version + '，可以关掉设置继续工作，完成后会提醒你。');
+  } catch (e) {
+    btn.disabled = false;
+    updText('updStatus', '下载没能开始：' + e.message + '（可点「打开发布页」手动下载）', 'var(--danger)');
+  }
+}
+
+function updPoll() {
+  if (!UPD) return;
+  clearInterval(updTimer);
+  document.getElementById('updProgressWrap').style.display = '';
+  document.getElementById('updErrHint').style.display = 'none';
+
+  const tick = () => {
+    fetch(UPD.agent + '/progress', { headers: { 'X-WB-Token': UPD.token } })
+      .then(r => r.json())
+      .then(o => {
+        if (!o || !o.ok) return;
+        if (o.error) {
+          clearInterval(updTimer);
+          const e = document.getElementById('updErrHint');
+          e.style.display = '';
+          e.textContent = '下载失败：' + o.error;
+          updText('updStatus', '下载失败', 'var(--danger)');
+          updToast('更新下载失败：' + o.error, true);
+          return;
+        }
+        const total = o.total || 0;
+        const pct = total ? Math.min(100, Math.round(o.got * 100 / total)) : 0;
+        document.getElementById('updProgressBar').style.width = pct + '%';
+        if (!o.done) {
+          updText('updProgressText', '正在下载 ' + updSize(o.got) +
+            (total ? ' / ' + updSize(total) + '（' + pct + '%）' : '（大小未知）'));
+        } else {
+          clearInterval(updTimer);
+          document.getElementById('updProgressBar').style.width = '100%';
+          updText('updProgressText', '下载完成：' + updSize(o.got));
+          const h = document.getElementById('updDoneHint');
+          h.style.display = '';
+          h.innerHTML = '安装包已放进 <code>update</code> 文件夹。<b>重启程序后生效</b>：' +
+            '双击「停止.bat」再双击「启动.bat」（或直接关掉程序重新打开）。';
+          updText('updStatus', '已下载完成，等待重启', 'var(--ok)');
+          updToast('新版本已下载完成，重启程序后生效。');
+        }
+      })
+      .catch(() => {});
+  };
+  tick();
+  updTimer = setInterval(tick, 800);
+}
+
+document.getElementById('updCheckBtn').onclick = updCheck;
+document.getElementById('updDownloadBtn').onclick = updStart;
+document.getElementById('updOpenPageBtn').onclick = () => window.open(UPD_PAGE, '_blank');
+
+/* 拿不到启动器时（手动打开 html、或自己从源码构建），退化成"打开下载页" */
 document.getElementById('pickUpdateZipBtn').onclick = () => {
   document.getElementById('updateZipInput').click();
 };
@@ -4636,15 +4879,13 @@ document.getElementById('updateZipInput').onchange = e => {
   const f = e.target.files && e.target.files[0];
   const hint = document.getElementById('updatePickHint');
   if (!f) return;
-  const ok = /\.zip$/i.test(f.name);
-  if (!ok) {
+  if (!/\.zip$/i.test(f.name)) {
     hint.innerHTML = '<span style="color:var(--danger)">这不是 .zip 压缩包，启动器认不出来。</span>';
   } else {
-    hint.innerHTML = '已确认：<b>' + esc(f.name) + '</b>（' +
-      (f.size / 1048576).toFixed(1) + ' MB）<br>' +
+    hint.innerHTML = '已确认：<b>' + esc(f.name) + '</b>（' + updSize(f.size) + '）<br>' +
       '请把它放进程序目录的 <b>update</b> 文件夹，然后重启程序。';
   }
-  e.target.value = '';   // 允许重复选同一个文件
+  e.target.value = '';
 };
 
 document.getElementById('addKeyBtn').onclick = () => {
@@ -4937,6 +5178,7 @@ renderAll();
 
 html = HTML.replace("__DATA__", DATA_JSON)
 html = html.replace("__WUYUE_PARSE__", PARSE_JS)
+html = html.replace("__APP_VERSION__", json.dumps(APP_VERSION))
 with open(OUT, "w", encoding="utf-8") as f:
     f.write(html)
 

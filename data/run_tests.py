@@ -26,6 +26,8 @@ NODE_TESTS = [
     ("test_api_settings_e2e.js", "设置页：验钥 / 模型 / 思考参数"),
     ("test_multi_exam_e2e.js", "多考试：隔离/勾选/对比/补充"),
     ("test_charts_e2e.js", "右栏分析与折线图"),
+    ("test_update_ui.js", "设置→更新：查版本/下载/重启提示"),
+    ("test_update_agent.js", "更新代理：鉴权/白名单/下载入位"),
 ]
 
 BUILD_TESTS = [

@@ -29,7 +29,7 @@
 --------------------------------------------------------------------------------------------------------
 DeepSeek Harness（DSH）               0.2.1-alpha.1     MIT                               MIT-DeepSeek-Harness.txt
 DSH 内置的 Web 前端                   0.2.1-alpha.1     MIT                               MIT-DeepSeek-WebFrontend.txt
-Node.js 运行时（runtime\node.exe）    v24.19.0          MIT                               MIT-Node.js.txt
+Node.js 运行时（runtime\node.exe）    v24.22.1          MIT                               MIT-Node.js.txt
 sharp                                 0.35.5            Apache-2.0                        Apache-2.0.txt
 @img/sharp-win32-x64（含 libvips）     0.35.5            Apache-2.0 + LGPL-3.0-or-later     Apache-2.0.txt、LGPL-3.0.txt、GPL-3.0.txt
   └ 其内置依赖（glib 等，见第三节）    —                 LGPL-2.1 / LGPL-3.0 等           LGPL-2.1.txt、GPL-2.0.txt
@@ -113,7 +113,7 @@ sherpa-onnx-node / -win-x64           1.13.8            Apache-2.0              
   4. Node.js 官方只以单个 node.exe 形式分发，不带 LICENSE 文件。
      本文件夹附了 MIT 正文（Node.js contributors 与 Joyent 两段），
      完整清单（含 node.exe 内置的 V8、OpenSSL、ICU、zlib 等第三方组件）
-     见 https://github.com/nodejs/node/blob/v24.19.0/LICENSE
+     见 https://github.com/nodejs/node/blob/v24.22.1/LICENSE
 
 
 六、我们自己的代码

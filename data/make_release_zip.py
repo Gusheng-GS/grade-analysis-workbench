@@ -161,6 +161,8 @@ def collect(src, name, new_exe):
                 items.append((None, arc, fix_manual(read_bytes(p), name)))
                 n_rewrite += 1
                 continue
+            if rel in EXTRA_FROM_DATA:
+                continue          # 这两个以仓库 data/ 里的版本为准，避免 zip 里出现同名重复条目
             items.append((p, arc, None))
 
     # data/ 下的运行时文件（版本号、更新代理）

@@ -14,7 +14,7 @@
 
 | | |
 |---|---|
-| 当前版本 | v0.1.1（实验性质，局限见下文第七节） |
+| 当前版本 | v0.1.2（实验性质，局限见下文第七节） |
 | 运行环境 | Windows 10 / 11 · 64 位 |
 | 开发工具 | DeepSeek Harness |
 | 底层模型 | DeepSeek V4.1 Flash |
@@ -85,7 +85,7 @@ python data\make_demo_page.py     # 生成 成绩分析工作台-演示版.html
 
 ## 三、给老师：解压即用（Windows）
 
-去 [Releases](../../releases/latest) 下载 **`grade-analysis-workbench-v0.1.1-windows-x64.zip`**（约 192 MB），解压后双击 **`启动.bat`**，浏览器会自动打开界面（`http://127.0.0.1:3080/`）。
+去 [Releases](../../releases/latest) 下载 **`grade-analysis-workbench-v0.1.2-windows-x64.zip`**（约 192 MB），解压后双击 **`启动.bat`**，浏览器会自动打开界面（`http://127.0.0.1:3080/`）。
 
 - 不需要装 Node、Python、数据库；压缩包里已经带好运行环境
 - 关闭：双击 `停止.bat`（只结束占用 3080 端口的进程，不动别的程序）

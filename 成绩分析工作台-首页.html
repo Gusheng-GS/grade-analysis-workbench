@@ -5236,7 +5236,7 @@ document.getElementById('backupFileInput').onchange = e => {
      代理  = 真正下载（启动器拉起的 update_agent.js），下到 update\ 里
      启动器 = 下次启动时 ApplyUpdate 自动安装并重新注入界面
    代理地址与 token 由启动器注入到 window.parent.__WB_UPDATER__，别的网站拿不到。 */
-const APP_VERSION = "0.1.1";
+const APP_VERSION = "0.1.2";
 
 function updCfg() {
   try { return (window.parent && window.parent.__WB_UPDATER__) || null; } catch (e) { return null; }

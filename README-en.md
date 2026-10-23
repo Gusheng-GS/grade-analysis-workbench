@@ -14,7 +14,7 @@ What I actually did: product design, requirement breakdown, architectural decisi
 
 | | |
 |---|---|
-| Version | v0.1.1 (experimental — see §7 for the honest limitations) |
+| Version | v0.1.2 (experimental — see §7 for the honest limitations) |
 | Platform | Windows 10 / 11, 64-bit |
 | Development tool | DeepSeek Harness |
 | Model | DeepSeek V4.1 Flash |
@@ -100,7 +100,7 @@ It fabricates 40 students (学生01…学生40), an example school and three mon
 
 ## 3. For teachers: unzip and run (Windows)
 
-Download **`grade-analysis-workbench-v0.1.1-windows-x64.zip`** (≈192 MB) from [Releases](../../releases/latest), unzip it, and double-click **`启动.bat`** ("start"); the browser opens the UI at `http://127.0.0.1:3080/`.
+Download **`grade-analysis-workbench-v0.1.2-windows-x64.zip`** (≈192 MB) from [Releases](../../releases/latest), unzip it, and double-click **`启动.bat`** ("start"); the browser opens the UI at `http://127.0.0.1:3080/`.
 
 - No Node.js, Python or database is required — the runtime is bundled.
 - To stop: double-click `停止.bat` ("stop"). It only kills whatever listens on port 3080, nothing else.

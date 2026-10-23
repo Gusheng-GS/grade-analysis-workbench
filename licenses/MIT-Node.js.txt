@@ -1,7 +1,7 @@
 Node.js 的许可证（MIT）
 
-node.exe 是 nodejs.org 官方发布的 v24.19.0 Windows x64 二进制，未做任何修改。
-以下正文摘自 Node.js 官方 LICENSE 文件（https://github.com/nodejs/node/blob/v24.19.0/LICENSE）。
+node.exe 是 nodejs.org 官方发布的 v24.22.1 Windows x64 二进制，未做任何修改。
+以下正文摘自 Node.js 官方 LICENSE 文件（https://github.com/nodejs/node/blob/v24.22.1/LICENSE）。
 该官方文件还逐条列出了 node.exe 内置的第三方组件（V8、OpenSSL、ICU、zlib 等）的许可，
 如需要完整清单，请访问上面的地址。
 

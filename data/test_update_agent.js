@@ -56,7 +56,7 @@ function req(method, p, body, headers) {
 
 (async () => {
   // ── 准备：临时"程序目录" ──
-  const TMPHOME = path.join(ROOT, "..", "build", "_tmp_update_agent");
+  const TMPHOME = path.join(ROOT, "_tmp_run", "_tmp_update_agent");
   fs.rmSync(TMPHOME, { recursive: true, force: true });
   fs.mkdirSync(TMPHOME, { recursive: true });
   const home = fs.mkdtempSync(path.join(TMPHOME, "wb-upd-"));

@@ -8,7 +8,15 @@
 
 const fs = require("fs");
 const path = require("path");
-const { JSDOM, VirtualConsole } = require("jsdom");
+
+// jsdom 有两种来路：仓库里跟着 npm install 走（node_modules/jsdom），
+// 开发机上放在 _devtools/node_modules 里。两边都能找到就行。
+function loadJsdom() {
+  const cands = [path.join(__dirname, "..", "_devtools", "node_modules", "jsdom"), "jsdom"];
+  for (const c of cands) { try { return require(c); } catch (e) { /* 试下一个 */ } }
+  throw new Error("找不到 jsdom：先 python data\\bootstrap.py 或 npm install");
+}
+const { JSDOM, VirtualConsole } = loadJsdom();
 
 const ROOT = path.dirname(__dirname);
 const PAGE = path.join(ROOT, "成绩分析工作台-首页.html");

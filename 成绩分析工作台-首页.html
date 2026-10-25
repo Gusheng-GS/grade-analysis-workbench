@@ -606,6 +606,107 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
   background: rgba(255,185,0,.12); border: 1px solid rgba(255,185,0,.3); color: var(--text-2);
   margin-bottom: 14px;
 }
+
+/* ── 组卷台 ──
+   三栏：左=组卷条件（知识点/题型/排序/题量），中=候选题池，右=小卷纸面预览。
+   现在题库检索（M4）与导出（M5）都还没接，所以题目池写死在本页 JS 里，
+   题号、知识点、班级得分率、零分人数都是 09 月考化学的真实统计。 */
+.asm-side { padding: 0 8px 12px; }
+.asm-tip {
+  font-size: 11px; line-height: 1.7; padding: 7px 9px; margin: 0 2px 10px;
+  border-radius: var(--radius-sm); background: var(--bg-subtle);
+  border: 1px solid var(--stroke); color: var(--text-3);
+}
+.asm-grp { margin-bottom: 13px; }
+.asm-grp > .t {
+  display: flex; align-items: center; font-size: 11.5px; font-weight: 600;
+  color: var(--text-2); margin-bottom: 5px;
+}
+.asm-grp > .t .r {
+  margin-left: auto; font-weight: 400; font-size: 11px; color: var(--accent); cursor: pointer;
+}
+.asm-chk {
+  display: flex; align-items: center; gap: 7px; padding: 5px 7px; cursor: pointer;
+  border-radius: var(--radius-sm); font-size: 12px; color: var(--text);
+}
+.asm-chk:hover { background: var(--hover); }
+.asm-chk input { margin: 0; accent-color: var(--accent); }
+.asm-chk .n { margin-left: auto; font-size: 10.5px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.asm-num {
+  width: 100%; font-size: 12px; padding: 5px 8px; color: var(--text);
+  border: 1px solid var(--stroke-strong); border-radius: var(--radius-sm); background: var(--bg-layer);
+}
+.asm-num:focus { outline: none; border-color: var(--accent); }
+
+/* 中栏：工具条 + 题卡 */
+.asm-body { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.asm-toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px;
+  border-bottom: 1px solid var(--stroke); background: var(--bg-layer); flex: 0 0 auto;
+}
+.asm-toolbar .cnt { font-size: 12px; color: var(--text-2); }
+.asm-toolbar .cnt b { color: var(--accent); font-variant-numeric: tabular-nums; }
+.asm-toolbar .grow { flex: 1; }
+.asm-search {
+  width: 136px; font-size: 12px; padding: 5px 9px; color: var(--text);
+  border: 1px solid var(--stroke-strong); border-radius: 14px; background: var(--bg-layer);
+}
+.asm-search:focus { outline: none; border-color: var(--accent); }
+.asm-pool {
+  flex: 1; overflow-y: auto; padding: 10px 12px;
+  display: flex; flex-direction: column; gap: 8px; min-height: 0;
+}
+.qcard {
+  border: 1px solid var(--stroke-strong); border-radius: 8px; padding: 9px 10px;
+  background: var(--bg-layer); cursor: pointer; transition: border-color .12s, box-shadow .12s;
+}
+.qcard:hover { border-color: rgba(0,120,212,.5); }
+.qcard.on { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(0,120,212,.14); }
+.qcard .q1 { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.qcard .qno { font-weight: 600; font-variant-numeric: tabular-nums; }
+.qcard .qkp {
+  font-size: 10.5px; padding: 1px 7px; border-radius: 9px; white-space: nowrap;
+  background: var(--bg-subtle); color: var(--text-2);
+}
+.qcard .qtype { font-size: 10.5px; color: var(--text-3); }
+.qcard .pick {
+  margin-left: auto; width: 15px; height: 15px; flex: 0 0 auto; border-radius: 50%;
+  border: 1.5px solid var(--stroke-strong); display: grid; place-items: center;
+  font-size: 9px; color: transparent;
+}
+.qcard.on .pick { background: var(--accent); border-color: var(--accent); color: #fff; }
+.qcard .stem {
+  margin-top: 6px; font-size: 12px; line-height: 1.65; color: var(--text-2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.qcard .qmeta { margin-top: 7px; display: flex; align-items: center; gap: 12px; font-size: 10.5px; color: var(--text-3); }
+.qcard .rate { display: flex; align-items: center; gap: 5px; }
+.qcard .rate .bar { width: 54px; height: 4px; border-radius: 2px; background: var(--bg-subtle); overflow: hidden; }
+.qcard .rate .bar > i { display: block; height: 100%; background: var(--accent); }
+.qcard .rate.lo .bar > i { background: var(--danger); }
+.qcard .rate.mid .bar > i { background: #d18f00; }
+.asm-empty { padding: 44px 16px; text-align: center; color: var(--text-3); font-size: 12.5px; line-height: 1.9; }
+
+/* 右栏：结构 + 纸面 */
+.asm-sum {
+  display: flex; gap: 16px; padding: 10px 14px;
+  border-bottom: 1px solid var(--stroke); font-size: 11px; color: var(--text-3);
+}
+.asm-sum > div { display: flex; flex-direction: column; gap: 1px; }
+.asm-sum b { font-size: 15px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+.asm-paper {
+  margin: 12px; padding: 18px 20px; min-height: 200px; border-radius: 6px;
+  background: #fff; color: #1a1a1a; box-shadow: 0 1px 3px rgba(0,0,0,.12);
+}
+.asm-paper .pp-t { font-size: 14.5px; font-weight: 700; text-align: center; margin-bottom: 3px; }
+.asm-paper .pp-s { font-size: 10.5px; color: #666; text-align: center; margin-bottom: 13px; }
+.asm-paper .pp-q { display: flex; gap: 6px; font-size: 11.5px; line-height: 1.8; margin-bottom: 6px; }
+.asm-paper .pp-q .n { flex: 0 0 auto; font-weight: 600; }
+.asm-paper .pp-q .x { color: #333; }
+.asm-paper .pp-q .m { color: #888; font-size: 10px; }
+.asm-paper .pp-empty { text-align: center; color: #999; font-size: 12px; padding: 40px 0; }
+.asm-foot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--stroke); }
+html[data-theme="dark"] .asm-paper { background: #f2f2f2; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
 </style>
 </head>
 <body>
@@ -621,6 +722,10 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
       <div class="mode-item" data-mode="plan">
         <div class="t"><span class="dot"></span>方案台</div>
         <div class="d">出方案：个人专属补弱清单、个性化训练方案，并复核 AI 结论</div>
+      </div>
+      <div class="mode-item" data-mode="assemble">
+        <div class="t"><span class="dot"></span>组卷台</div>
+        <div class="d">出小卷：按知识点挑题、拼一张限时练，导出题目与答案</div>
       </div>
     </div>
   </div>
@@ -660,20 +765,59 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
       </div>
       <div class="divider" id="convDivider"></div>
 
-      <div class="sec-label">考试 <span class="r" id="examHint"></span></div>
-      <div class="exam-box">
-        <div class="exam-tip" id="examTip"></div>
-        <div id="examList"></div>
+      <div id="examSec">
+        <div class="sec-label">考试 <span class="r" id="examHint"></span></div>
+        <div class="exam-box">
+          <div class="exam-tip" id="examTip"></div>
+          <div id="examList"></div>
+        </div>
       </div>
 
-      <div class="sec-label">班级 · 学生 <span class="r" id="stuCount"></span></div>
-      <div class="class-card">
-        <div class="name" id="clsName"></div>
-        <div class="sub" id="clsSub"></div>
-        <div class="src" id="clsSrc"></div>
+      <!-- 组卷台：左栏换成组卷条件（知识点 / 题型 / 排序 / 题量） -->
+      <div class="asm-side" id="asmLeft" style="display:none">
+        <div class="asm-tip">题库检索（M4）还没接上，下面是 <b>09 月考化学</b> 的 8 道题，用来先把版面定下来。</div>
+
+        <div class="asm-grp">
+          <div class="t">按知识点 <span class="r" id="asmKpAll">全选 / 全不选</span></div>
+          <div id="asmKpList"></div>
+        </div>
+
+        <div class="asm-grp">
+          <div class="t">题型</div>
+          <div class="seg" id="asmTypeSeg">
+            <button class="seg-btn on" data-asm-type="all">不限</button>
+            <button class="seg-btn" data-asm-type="单选">单选</button>
+            <button class="seg-btn" data-asm-type="非选择">非选择</button>
+          </div>
+        </div>
+
+        <div class="asm-grp">
+          <div class="t">排序</div>
+          <select class="asm-num" id="asmSort">
+            <option value="rate">按班级得分率（错得多的在前）</option>
+            <option value="no">按题号</option>
+          </select>
+        </div>
+
+        <div class="asm-grp">
+          <div class="t">目标题数 / 限时（分钟）</div>
+          <div style="display:flex;gap:6px">
+            <input class="asm-num" id="asmTarget" type="number" min="1" max="18" step="1" />
+            <input class="asm-num" id="asmMinutes" type="number" min="5" max="90" step="5" />
+          </div>
+        </div>
       </div>
-      <div id="stuList"></div>
-      <div style="height:10px"></div>
+
+      <div id="stuLeft">
+        <div class="sec-label">班级 · 学生 <span class="r" id="stuCount"></span></div>
+        <div class="class-card">
+          <div class="name" id="clsName"></div>
+          <div class="sub" id="clsSub"></div>
+          <div class="src" id="clsSrc"></div>
+        </div>
+        <div id="stuList"></div>
+        <div style="height:10px"></div>
+      </div>
     </div>
   </section>
 
@@ -733,6 +877,18 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
         <div class="empty">还没有生成方案。<br>在上方选择学生，然后点「生成方案」。</div>
       </div>
     </div>
+
+    <!-- 组卷台：候选题池。勾哪几道，右边就拼哪几道。 -->
+    <div class="col-body asm-body" id="asmPane" style="display:none">
+      <div class="asm-toolbar">
+        <span class="cnt" id="asmCount"></span>
+        <button class="tbtn" id="asmAuto" title="按班级得分率从低到高挑满">按掌握率挑满</button>
+        <button class="tbtn" id="asmClear">清空</button>
+        <span class="grow"></span>
+        <input class="asm-search" id="asmSearch" placeholder="搜题干 / 知识点" />
+      </div>
+      <div class="asm-pool" id="asmPool"></div>
+    </div>
   </section>
 
   <section class="col">
@@ -780,6 +936,24 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
         <div class="sect">
           <div class="sect-title">已生成的方案</div>
           <div id="planHistory"></div>
+        </div>
+      </div>
+
+      <!-- 组卷台右栏：小卷结构（题数/总分/限时）+ 纸面预览 -->
+      <div class="panel-inner" id="asmPanel" style="display:none">
+        <div class="asm-sum" id="asmSum"></div>
+        <div class="sect">
+          <div class="sect-title">小卷标题</div>
+          <input class="asm-num" id="asmTitle" />
+          <label class="asm-chk" style="margin-top:6px">
+            <input type="checkbox" id="asmAnswers" checked />
+            <span>附答案页（题号 + 答案 + 解析）</span>
+          </label>
+        </div>
+        <div class="asm-paper" id="asmPaper"></div>
+        <div class="asm-foot">
+          <button class="tbtn primary" id="asmExport">导出 Word</button>
+          <button class="tbtn" id="asmPrint">打印 / PDF</button>
         </div>
       </div>
     </div>
@@ -1938,6 +2112,21 @@ const state = {
   selectedExamIds: [],
   primaryExamId: null,
   importSource: '',
+  // ── 组卷台 ──
+  //   kp      : 参与筛选的知识点 id 列表
+  //   picked  : 已勾选的题号（就用 '单选7' / '17' 这种，跟题面一致）
+  //   target  : 目标题数；minutes: 限时
+  asm: {
+    kp: ['选必1-2.1', '选必1-1.2', '选必1-2.2', '选必1-1.3'],
+    type: 'all',
+    sort: 'rate',
+    target: 6,
+    minutes: 20,
+    picked: [],
+    title: '化学反应速率与平衡 · 专项限时练',
+    answers: true,
+    q: '',
+  },
 };
 
 function uid(p) { return (p || 'x') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -1955,6 +2144,7 @@ function save() {
       settings: state.settings,
       plans: state.plans,
       isDemo: state.isDemo,
+      asm: state.asm,
     }));
   } catch (e) {}
 }
@@ -1991,6 +2181,7 @@ function load() {
       isDemo: s.isDemo !== false,
     });
     if (s.settings) Object.assign(state.settings, s.settings);
+    if (s.asm && typeof s.asm === 'object') Object.assign(state.asm, s.asm);
 
     // 隐私 →「在本机保存对话记录」关掉时，即使盘上有旧对话也不恢复
     if (state.settings.saveHistory === false) {
@@ -2112,6 +2303,212 @@ function textToHtml(t) {
   return esc(t).replace(/\n/g, '<br>');
 }
 
+/* ── 组卷台 ──
+   目的：按知识点从题库里挑题，拼成一张限时小练，导出题目页 + 答案页。
+   现在只有界面与选题逻辑：
+     · 题库检索（M4）还没接，题目池写死在本页（8 道，09 月考化学，
+       题号/知识点/班级得分率/零分人数都是真实统计）；
+     · 导出（M5）也没接，点了只提示，先把版面、题型、题量定下来。
+   所以这里刻意不给"假题库"，宁可只有 8 道题。 */
+const ASM_POOL = [
+  { no: '单选7',  kp: '选必1-2.1', name: '反应方向与限度', type: '单选',   score: 3,  rate: 12.7, zero: 35, stem: '下列事实能用勒夏特列原理解释的是' },
+  { no: '单选13', kp: '选必1-2.2', name: '化学反应速率',   type: '单选',   score: 3,  rate: 35.0, zero: 26, stem: '某小组设计实验，探究影响该反应速率的因素' },
+  { no: '单选14', kp: '选必1-2.1', name: '反应方向与限度', type: '单选',   score: 3,  rate: 42.7, zero: 23, stem: '下列说法错误的是（压强、温度、催化剂对平衡影响的曲线）' },
+  { no: '单选11', kp: '选必1-1.2', name: '化学反应与热能', type: '单选',   score: 3,  rate: 47.3, zero: 21, stem: '下列依据热化学方程式得出的结论正确的是' },
+  { no: '17',     kp: '选必1-2.1', name: '反应方向与限度', type: '非选择', score: 10, rate: 55.0, zero: 1,  stem: '二甲醚(DME)是一种重要的清洁燃料，工业上可利用合成气合成' },
+  { no: '18',     kp: '选必1-2.1', name: '反应方向与限度', type: '非选择', score: 14, rate: 60.7, zero: 0,  stem: '一碳化学以只含一个碳原子的化合物为原料生产化工产品' },
+  { no: '16',     kp: '选必1-1.2', name: '化学反应与热能', type: '非选择', score: 13, rate: 63.8, zero: 2,  stem: '完成下列问题：反应①消耗 8 g CH₄(g) 吸收的热量' },
+  { no: '单选8',  kp: '选必1-1.3', name: '化学反应与电能', type: '单选',   score: 3,  rate: 67.3, zero: 13, stem: '下列实验操作不能达到实验目的的是' },
+];
+const ASM_KPS = [
+  { id: '选必1-2.1', name: '反应方向与限度' },
+  { id: '选必1-1.2', name: '化学反应与热能' },
+  { id: '选必1-2.2', name: '化学反应速率' },
+  { id: '选必1-1.3', name: '化学反应与电能' },
+  { id: '选必1-2.3', name: '反应调控（催化剂）' },
+];
+
+function asmNumOf(no) { return parseInt(String(no).replace(/\D+/g, ''), 10) || 0; }
+
+/** 左栏条件筛完、按当前排序排好的题池 */
+function asmList() {
+  const a = state.asm;
+  let list = ASM_POOL.filter(q => a.kp.indexOf(q.kp) >= 0);
+  if (a.type !== 'all') list = list.filter(q => q.type === a.type);
+  const k = (a.q || '').trim().toLowerCase();
+  if (k) list = list.filter(q => (q.no + q.name + q.stem).toLowerCase().indexOf(k) >= 0);
+  return list.slice().sort((x, y) => a.sort === 'no' ? asmNumOf(x.no) - asmNumOf(y.no) : x.rate - y.rate);
+}
+/** 已勾选的题，按题池顺序排 */
+function asmPicked() {
+  return asmList().filter(q => state.asm.picked.indexOf(q.no) >= 0);
+}
+function asmRateClass(r) { return r < 40 ? 'lo' : (r < 60 ? 'mid' : ''); }
+
+function renderAsm() {
+  const a = state.asm;
+
+  // 左：知识点勾选（带每条的题数）
+  const kpBox = document.getElementById('asmKpList');
+  if (kpBox) {
+    kpBox.innerHTML = ASM_KPS.map(k => {
+      const n = ASM_POOL.filter(q => q.kp === k.id).length;
+      const on = a.kp.indexOf(k.id) >= 0;
+      return '<label class="asm-chk">' +
+        '<input type="checkbox" data-kp="' + k.id + '"' + (on ? ' checked' : '') + (n ? '' : ' disabled') + ' />' +
+        '<span>' + k.name + '</span><span class="n">' + n + ' 题</span></label>';
+    }).join('');
+  }
+
+  // 中：题池
+  const pool = document.getElementById('asmPool');
+  const list = asmList();
+  if (pool) {
+    pool.innerHTML = list.length ? list.map(q => {
+      const on = a.picked.indexOf(q.no) >= 0;
+      return '<div class="qcard' + (on ? ' on' : '') + '" data-no="' + q.no + '">' +
+        '<div class="q1"><span class="qno">' + q.no + '</span>' +
+        '<span class="qkp">' + q.name + '</span>' +
+        '<span class="qtype">' + q.type + ' · ' + q.score + ' 分</span>' +
+        '<span class="pick">✓</span></div>' +
+        '<div class="stem">' + esc(q.stem) + '</div>' +
+        '<div class="qmeta">' +
+        '<span class="rate ' + asmRateClass(q.rate) + '">得分率 ' + q.rate.toFixed(1) + '%' +
+        '<span class="bar"><i style="width:' + q.rate + '%"></i></span></span>' +
+        '<span>零分 ' + q.zero + ' 人</span></div></div>';
+    }).join('') : '<div class="asm-empty">没有符合条件的题。<br>把左边的知识点或题型放宽一点。</div>';
+  }
+
+  // 计数
+  const picked = asmPicked();
+  const total = picked.reduce((s, q) => s + q.score, 0);
+  const cnt = document.getElementById('asmCount');
+  if (cnt) cnt.innerHTML = '已选 <b>' + picked.length + '</b> / 目标 ' + a.target + ' 题';
+  const hint = document.getElementById('centerHint');
+  if (hint && state.mode === 'assemble') hint.textContent = '已选 ' + picked.length + ' 题 · 目标 ' + a.target + ' 题';
+
+  // 右：结构
+  const sum = document.getElementById('asmSum');
+  if (sum) {
+    sum.innerHTML = '<div><b>' + picked.length + '</b>题</div>' +
+      '<div><b>' + total + '</b>分</div>' +
+      '<div><b>' + (a.minutes || 20) + '</b>分钟</div>' +
+      '<div><b>' + picked.filter(q => q.type === '非选择').length + '</b>道大题</div>';
+  }
+
+  // 右：纸面预览
+  const paper = document.getElementById('asmPaper');
+  if (paper) {
+    const title = (a.title || '').trim() || '化学 · 专项限时练';
+    paper.innerHTML = '<div class="pp-t">' + esc(title) + '</div>' +
+      '<div class="pp-s">' + (a.answers ? '含答案页' : '不含答案页') + ' · 共 ' + picked.length + ' 题 · ' +
+      total + ' 分 · ' + (a.minutes || 20) + ' 分钟</div>' +
+      (picked.length ? picked.map((q, i) =>
+        '<div class="pp-q"><span class="n">' + (i + 1) + '.</span>' +
+        '<span class="x">' + esc(q.stem) + '</span>' +
+        '<span class="m">(' + q.score + '分)</span></div>').join('')
+        : '<div class="pp-empty">还没选题。<br>在中间勾几道，或点「按掌握率挑满」。</div>');
+  }
+
+  const tIn = document.getElementById('asmTitle');
+  if (tIn && tIn.value !== a.title) tIn.value = a.title;
+}
+
+function asmToast(msg) {
+  let el = document.getElementById('asmToast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'asmToast';
+    el.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9999;' +
+      'max-width:520px;padding:10px 14px;border-radius:8px;font-size:12.5px;line-height:1.65;' +
+      'background:rgba(32,32,32,.94);color:#fff;box-shadow:0 6px 20px rgba(0,0,0,.28);' +
+      'opacity:0;transition:opacity .18s;pointer-events:none;';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.opacity = '1';
+  clearTimeout(asmToast._t);
+  asmToast._t = setTimeout(() => { el.style.opacity = '0'; }, 3400);
+}
+
+let asmBound = false;
+function asmInit() {
+  if (asmBound) return;
+  asmBound = true;
+
+  document.getElementById('asmKpList').addEventListener('change', e => {
+    const cb = e.target.closest('input[data-kp]');
+    if (!cb) return;
+    const id = cb.dataset.kp, i = state.asm.kp.indexOf(id);
+    if (cb.checked && i < 0) state.asm.kp.push(id);
+    if (!cb.checked && i >= 0) state.asm.kp.splice(i, 1);
+    renderAsm(); save();
+  });
+  document.getElementById('asmKpAll').addEventListener('click', () => {
+    state.asm.kp = state.asm.kp.length ? [] : ASM_KPS.map(k => k.id);
+    renderAsm(); save();
+  });
+  document.getElementById('asmTypeSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-asm-type]');
+    if (!b) return;
+    state.asm.type = b.dataset.asmType;
+    document.querySelectorAll('#asmTypeSeg .seg-btn').forEach(x => x.classList.toggle('on', x === b));
+    renderAsm(); save();
+  });
+  const sortSel = document.getElementById('asmSort');
+  sortSel.addEventListener('change', () => { state.asm.sort = sortSel.value; renderAsm(); save(); });
+  const tgt = document.getElementById('asmTarget');
+  tgt.addEventListener('change', () => {
+    let v = parseInt(tgt.value, 10);
+    if (!(v > 0)) v = 6;
+    v = Math.max(1, Math.min(18, v));
+    tgt.value = v; state.asm.target = v; renderAsm(); save();
+  });
+  const mins = document.getElementById('asmMinutes');
+  mins.addEventListener('change', () => {
+    let v = parseInt(mins.value, 10);
+    if (!(v > 0)) v = 20;
+    v = Math.max(5, Math.min(90, v));
+    mins.value = v; state.asm.minutes = v; renderAsm(); save();
+  });
+  const search = document.getElementById('asmSearch');
+  search.addEventListener('input', () => { state.asm.q = search.value; renderAsm(); });
+  document.getElementById('asmAuto').addEventListener('click', () => {
+    state.asm.picked = asmList().slice(0, state.asm.target).map(q => q.no);
+    renderAsm(); save();
+  });
+  document.getElementById('asmClear').addEventListener('click', () => {
+    state.asm.picked = []; renderAsm(); save();
+  });
+  document.getElementById('asmPool').addEventListener('click', e => {
+    const card = e.target.closest('.qcard');
+    if (!card) return;
+    const no = card.dataset.no, i = state.asm.picked.indexOf(no);
+    if (i >= 0) state.asm.picked.splice(i, 1); else state.asm.picked.push(no);
+    renderAsm(); save();
+  });
+  const titleIn = document.getElementById('asmTitle');
+  titleIn.addEventListener('input', () => { state.asm.title = titleIn.value; renderAsm(); save(); });
+  const ansCb = document.getElementById('asmAnswers');
+  ansCb.addEventListener('change', () => { state.asm.answers = ansCb.checked; renderAsm(); save(); });
+  document.getElementById('asmExport').addEventListener('click', () => asmToast('导出要等 M5：这里先把题目、分值、版面定下来，导出接上后不用改界面。'));
+  document.getElementById('asmPrint').addEventListener('click', () => asmToast('打印同理，等 M5 一起接。现在可以先看右边这张纸。'));
+
+  // 第一次进来给一份默认的卷子：得分率最低的几道
+  if (!state.asm.picked.length) {
+    state.asm.picked = asmList().slice(0, state.asm.target).map(q => q.no);
+  }
+  // 控件初值同步到 state
+  sortSel.value = state.asm.sort;
+  tgt.value = state.asm.target;
+  mins.value = state.asm.minutes;
+  ansCb.checked = state.asm.answers !== false;
+  titleIn.value = state.asm.title;
+  document.querySelectorAll('#asmTypeSeg .seg-btn').forEach(x =>
+    x.classList.toggle('on', x.dataset.asmType === state.asm.type));
+  renderAsm();
+}
+
 /* ── 台面切换 ── */
 const modeBtn = document.getElementById('modeBtn');
 const modeMenu = document.getElementById('modeMenu');
@@ -2124,27 +2521,49 @@ document.querySelectorAll('.mode-item').forEach(el => {
 function setMode(m) {
   state.mode = m;
   const isA = m === 'analyze';
-  document.getElementById('modeName').textContent = isA ? '分析台' : '方案台';
+  const isP = m === 'plan';
+  const isS = m === 'assemble';
+  document.getElementById('modeName').textContent = isS ? '组卷台' : (isA ? '分析台' : '方案台');
   document.querySelectorAll('.mode-item').forEach(el => el.classList.toggle('on', el.dataset.mode === m));
 
+  // 中间栏：分析=对话，方案=方案草稿，组卷=候选题池
   document.getElementById('chatPane').style.display = isA ? '' : 'none';
   document.getElementById('chatComposer').style.display = isA ? '' : 'none';
-  document.getElementById('planToolbar').style.display = isA ? 'none' : '';
-  document.getElementById('planPane').style.display = isA ? 'none' : '';
+  document.getElementById('planToolbar').style.display = isP ? '' : 'none';
+  document.getElementById('planPane').style.display = isP ? '' : 'none';
+  document.getElementById('asmPane').style.display = isS ? '' : 'none';
+  // 右栏
   document.getElementById('analyzePanel').style.display = isA ? '' : 'none';
-  document.getElementById('planPanel').style.display = isA ? 'none' : '';
+  document.getElementById('planPanel').style.display = isP ? '' : 'none';
+  document.getElementById('asmPanel').style.display = isS ? '' : 'none';
+  // 左栏：组卷台把"对话 / 考试 / 学生"换成组卷条件
+  document.getElementById('asmLeft').style.display = isS ? '' : 'none';
+  document.getElementById('examSec').style.display = isS ? 'none' : '';
+  document.getElementById('stuLeft').style.display = isS ? 'none' : '';
+  ['convLabel', 'convBar', 'convKeyRow', 'convDivider'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = isS ? 'none' : '';
+  });
 
-  // 方案台才显示"对话 / 方案草稿"切换（分析台固定为对话）
-  document.getElementById('planViewSeg').style.display = isA ? 'none' : '';
+  // 方案台才显示"对话 / 方案草稿"切换（分析台固定为对话，组卷台没有对话）
+  document.getElementById('planViewSeg').style.display = isP ? '' : 'none';
 
-  document.getElementById('centerTitle').textContent = isA ? '对话分析' : '方案 · 补弱清单';
-  document.getElementById('centerHint').textContent = isA ? '可直接提问' : '面向单个学生';
-  document.getElementById('rightTitle').textContent = isA ? '成绩分析' : '方案与复核';
-  document.getElementById('rightNote').textContent = isA
-    ? '数据为逐题统计结果，可直接使用'
-    : '⚠ 标黄内容为 AI 推断，请人工确认后再发给学生';
+  document.getElementById('centerTitle').textContent = isS ? '候选题' : (isA ? '对话分析' : '方案 · 补弱清单');
+  document.getElementById('centerHint').textContent = isS ? '' : (isA ? '可直接提问' : '面向单个学生');
+  document.getElementById('rightTitle').textContent = isS ? '小卷预览' : (isA ? '成绩分析' : '方案与复核');
+  document.getElementById('rightNote').textContent = isS
+    ? '演示：题库检索（M4）未接，题目池为 09 月考化学 8 题'
+    : (isA ? '数据为逐题统计结果，可直接使用'
+           : '⚠ 标黄内容为 AI 推断，请人工确认后再发给学生');
 
-  if (!isA) {
+  // 组卷台没有对话，别去动对话列表
+  if (isS) {
+    renderAsm();
+    save();
+    return;
+  }
+
+  if (isP) {
     renderPlanStudentOptions();
     setPlanView(state.planView || 'chat', true);
     // 刚切到方案台时，右侧先按模块汇总（不默认选中某个学生）
@@ -5708,6 +6127,7 @@ function renderAll() {
   renderPlanHistory();
   renderPlanStudentOptions();
   renderDataStat();
+  asmInit();
   setMode(state.mode);
 }
 

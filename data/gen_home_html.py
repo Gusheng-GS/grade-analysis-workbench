@@ -778,6 +778,32 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
 .asm-paper .pp-q .m { color: #888; font-size: 10px; }
 .asm-paper .pp-empty { text-align: center; color: #999; font-size: 12px; padding: 40px 0; }
 .asm-foot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--stroke); }
+
+/* 组卷台：每人一张的切换条 + "这份卷子给谁" */
+.asm-nav {
+  display: flex; align-items: center; gap: 6px; padding: 7px 10px;
+  border-bottom: 1px solid var(--stroke); font-size: 11px; color: var(--text-3);
+}
+.asm-nav button {
+  width: 24px; height: 24px; border: 1px solid var(--stroke); border-radius: 5px;
+  background: var(--bg-layer); color: var(--text-2); cursor: pointer; font-size: 12px; line-height: 1;
+}
+.asm-nav button:hover { background: var(--hover); }
+.asm-nav button:disabled { opacity: .4; cursor: default; }
+.asm-nav .who { flex: 1; text-align: center; font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.asm-nav .who b { font-weight: 600; }
+.asm-nav .bads { color: var(--danger); }
+.qcard .who { font-size: 10.5px; color: var(--danger); }
+.qcard .who.ok { color: var(--ok, #12805c); }
+.qcard .who.none { color: var(--text-3); }
+.asm-paper .pp-name { font-size: 11px; color: #888; text-align: center; margin-bottom: 2px; }
+.asm-paper .pp-line { font-size: 11px; color: #444; margin: 10px 0 4px; letter-spacing: .5px; }
+.asm-paper .pp-ans { border-top: 1px dashed #bbb; margin-top: 12px; padding-top: 8px; }
+.asm-paper .pp-ans .h { font-size: 11.5px; font-weight: 700; margin-bottom: 5px; }
+.asm-paper .pp-ans .a,
+.asm-paper .pp-ans .pp-a { font-size: 11px; line-height: 1.8; color: #333; }
+.qcard .who.bad { color: var(--danger); }
+html[data-theme="dark"] .asm-nav button { background: rgba(255,255,255,.06); }
 html[data-theme="dark"] .asm-paper { background: #f2f2f2; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
 </style>
 </head>
@@ -845,9 +871,17 @@ html[data-theme="dark"] .asm-paper { background: #f2f2f2; box-shadow: 0 1px 4px 
         </div>
       </div>
 
-      <!-- 组卷台：左栏换成组卷条件（知识点 / 题型 / 排序 / 题量） -->
+      <!-- 组卷台：左栏换成组卷条件（出卷对象 / 知识点 / 题型 / 排序 / 题量） -->
       <div class="asm-side" id="asmLeft" style="display:none">
-        <div class="asm-tip">题库检索（M4）还没接上，下面是 <b>09 月考化学</b> 的 8 道题，用来先把版面定下来。</div>
+        <div class="asm-grp">
+          <div class="t">出卷对象</div>
+          <div class="seg" id="asmScopeSeg">
+            <button class="seg-btn on" data-asm-scope="class">全班各一张</button>
+            <button class="seg-btn" data-asm-scope="one">只出一个人</button>
+          </div>
+          <select class="asm-num" id="asmStu" style="display:none;margin-top:6px"></select>
+          <div class="asm-tip" id="asmScopeTip" style="margin-top:6px"></div>
+        </div>
 
         <div class="asm-grp">
           <div class="t">按知识点 <span class="r" id="asmKpAll">全选 / 全不选</span></div>
@@ -1011,9 +1045,10 @@ html[data-theme="dark"] .asm-paper { background: #f2f2f2; box-shadow: 0 1px 4px 
         </div>
       </div>
 
-      <!-- 组卷台右栏：小卷结构（题数/总分/限时）+ 纸面预览 -->
+      <!-- 组卷台右栏：小卷结构（题数/总分/限时）+ 每人一张的切换 + 纸面预览 -->
       <div class="panel-inner" id="asmPanel" style="display:none">
         <div class="asm-sum" id="asmSum"></div>
+        <div class="asm-nav" id="asmNav" style="display:none"></div>
         <div class="sect">
           <div class="sect-title">小卷标题</div>
           <input class="asm-num" id="asmTitle" />
@@ -1553,10 +1588,16 @@ const state = {
   primaryExamId: null,
   importSource: '',
   // ── 组卷台 ──
+  //   scope   : 'class' 全班各一张（按每人错题自动挑） | 'one' 只出一个人（手动挑）
+  //   stu     : 'one' 模式下选的学生
+  //   view    : 'class' 模式下正在看第几个学生的卷子
   //   kp      : 参与筛选的知识点 id 列表
-  //   picked  : 已勾选的题号（就用 '单选7' / '17' 这种，跟题面一致）
+  //   picked  : 'one' 模式下已勾选的题号（'单选7' / '17'，跟题面一致）
   //   target  : 目标题数；minutes: 限时
   asm: {
+    scope: 'class',
+    stu: '',
+    view: 0,
     kp: ['选必1-2.1', '选必1-1.2', '选必1-2.2', '选必1-1.3'],
     type: 'all',
     sort: 'rate',
@@ -1744,21 +1785,23 @@ function textToHtml(t) {
 }
 
 /* ── 组卷台 ──
-   目的：按知识点从题库里挑题，拼成一张限时小练，导出题目页 + 答案页。
-   现在只有界面与选题逻辑：
+   目的：按知识点挑题，给班级里每个人各拼一张"针对他自己错题"的限时小练，
+         导出题目页 + 答案页（一人一页）。
+   现在的边界：
      · 题库检索（M4）还没接，题目池写死在本页（8 道，09 月考化学，
        题号/知识点/班级得分率/零分人数都是真实统计）；
-     · 导出（M5）也没接，点了只提示，先把版面、题型、题量定下来。
-   所以这里刻意不给"假题库"，宁可只有 8 道题。 */
+     · 挑人挑题是真的：用导入成绩时留下的逐题得分（DATA.学生[i].小题），
+       谁这道题丢了分，这道题对他就有优先级 —— 所以每个人的卷子不一样。
+   刻意不给"假题库"，宁可只有 8 道题。 */
 const ASM_POOL = [
-  { no: '单选7',  kp: '选必1-2.1', name: '反应方向与限度', type: '单选',   score: 3,  rate: 12.7, zero: 35, stem: '下列事实能用勒夏特列原理解释的是' },
-  { no: '单选13', kp: '选必1-2.2', name: '化学反应速率',   type: '单选',   score: 3,  rate: 35.0, zero: 26, stem: '某小组设计实验，探究影响该反应速率的因素' },
-  { no: '单选14', kp: '选必1-2.1', name: '反应方向与限度', type: '单选',   score: 3,  rate: 42.7, zero: 23, stem: '下列说法错误的是（压强、温度、催化剂对平衡影响的曲线）' },
-  { no: '单选11', kp: '选必1-1.2', name: '化学反应与热能', type: '单选',   score: 3,  rate: 47.3, zero: 21, stem: '下列依据热化学方程式得出的结论正确的是' },
-  { no: '17',     kp: '选必1-2.1', name: '反应方向与限度', type: '非选择', score: 10, rate: 55.0, zero: 1,  stem: '二甲醚(DME)是一种重要的清洁燃料，工业上可利用合成气合成' },
-  { no: '18',     kp: '选必1-2.1', name: '反应方向与限度', type: '非选择', score: 14, rate: 60.7, zero: 0,  stem: '一碳化学以只含一个碳原子的化合物为原料生产化工产品' },
-  { no: '16',     kp: '选必1-1.2', name: '化学反应与热能', type: '非选择', score: 13, rate: 63.8, zero: 2,  stem: '完成下列问题：反应①消耗 8 g CH₄(g) 吸收的热量' },
-  { no: '单选8',  kp: '选必1-1.3', name: '化学反应与电能', type: '单选',   score: 3,  rate: 67.3, zero: 13, stem: '下列实验操作不能达到实验目的的是' },
+  { no: '单选7',  subj: '化学', kp: '选必1-2.1', name: '反应方向与限度', type: '单选',   score: 3,  rate: 12.7, zero: 35, ans: 'B（溴水褪色是次溴酸分解使平衡正移，能用勒夏特列原理解释；加催化剂、钝化后加热都不是平衡移动。）', stem: '下列事实能用勒夏特列原理解释的是' },
+  { no: '单选13', subj: '化学', kp: '选必1-2.2', name: '化学反应速率',   type: '单选',   score: 3,  rate: 35.0, zero: 26, ans: 'D（看曲线斜率比速率，注意控制单一变量。）', stem: '某小组设计实验，探究影响该反应速率的因素' },
+  { no: '单选14', subj: '化学', kp: '选必1-2.1', name: '反应方向与限度', type: '单选',   score: 3,  rate: 42.7, zero: 23, ans: 'D（压强、温度、催化剂对平衡影响的几条曲线要分清"改变速率"还是"移动平衡"。）', stem: '下列说法错误的是（压强、温度、催化剂对平衡影响的曲线）' },
+  { no: '单选11', subj: '化学', kp: '选必1-1.2', name: '化学反应与热能', type: '单选',   score: 3,  rate: 47.3, zero: 21, ans: 'C（热化学方程式的系数、状态、ΔH 与反应方向四件事要对得上。）', stem: '下列依据热化学方程式得出的结论正确的是' },
+  { no: '17',     subj: '化学', kp: '选必1-2.1', name: '反应方向与限度', type: '非选择', score: 10, rate: 55.0, zero: 1,  ans: '见解析（含平衡常数计算与图像，答案带图，待题库接入后随题带出。）', stem: '二甲醚(DME)是一种重要的清洁燃料，工业上可利用合成气合成' },
+  { no: '18',     subj: '化学', kp: '选必1-2.1', name: '反应方向与限度', type: '非选择', score: 14, rate: 60.7, zero: 0,  ans: '见解析（(1)高温 (2)BC (3)D (4)0.03mol/(L·min)、80%、4 (5)(6) 含图。）', stem: '一碳化学以只含一个碳原子的化合物为原料生产化工产品' },
+  { no: '16',     subj: '化学', kp: '选必1-1.2', name: '化学反应与热能', type: '非选择', score: 13, rate: 63.8, zero: 2,  ans: '见解析（盖斯定律求 ΔH，注意系数与状态，部分答案含图。）', stem: '完成下列问题：反应①消耗 8 g CH₄(g) 吸收的热量' },
+  { no: '单选8',  subj: '化学', kp: '选必1-1.3', name: '化学反应与电能', type: '单选',   score: 3,  rate: 67.3, zero: 13, ans: 'D（原电池/电解池的电极判断与离子移动方向。）', stem: '下列实验操作不能达到实验目的的是' },
 ];
 const ASM_KPS = [
   { id: '选必1-2.1', name: '反应方向与限度' },
@@ -1769,6 +1812,169 @@ const ASM_KPS = [
 ];
 
 function asmNumOf(no) { return parseInt(String(no).replace(/\D+/g, ''), 10) || 0; }
+
+/* ── 按人出卷：谁做对了、谁丢了分 ──
+   依据是导入成绩时留下的逐题得分（DATA.学生[i].小题）。
+   所以"每人一张"不是随机分的，是真按他这次的错题挑的。 */
+function asmStuList() {
+  const list = (DATA && DATA.学生) ? DATA.学生.slice() : [];
+  return list.sort((x, y) => (x.班名次 || 0) - (y.班名次 || 0));
+}
+function asmStu(name) {
+  const list = asmStuList();
+  return list.filter(s => s.姓名 === name)[0] || list[0] || null;
+}
+/** 这次导入的成绩里有没有逐题得分 */
+function asmHasItems() {
+  const list = asmStuList();
+  if (!list.length) return false;
+  return !!(list[0].小题 && Object.keys(list[0].小题).length);
+}
+/** 某人某题得了几分；没有这项数据返回 null */
+function asmGot(stu, q) {
+  if (!stu || !stu.小题 || !q) return null;
+  const m = stu.小题[q.subj || '化学'];
+  if (!m) return null;
+  const v = m[q.no];
+  return typeof v === 'number' ? v : null;
+}
+/** 丢分比例 0~1；没有数据返回 null */
+function asmLoss(stu, q) {
+  const got = asmGot(stu, q);
+  if (got === null || !q.score) return null;
+  return Math.max(0, Math.min(1, (q.score - got) / q.score));
+}
+/** 这道题对这个人的优先级：自己丢分越多 + 全班越难，越靠前 */
+function asmPri(stu, q) {
+  const hard = Math.max(0, Math.min(1, 1 - (q.rate / 100)));
+  const loss = asmLoss(stu, q);
+  if (loss === null) return hard * 0.5;
+  return loss * 0.65 + hard * 0.35;
+}
+/** 给这个人挑 n 道：优先级高的在前，同分按题号 */
+function asmPickFor(stu, list, n) {
+  return list.slice()
+    .sort((x, y) => (asmPri(stu, y) - asmPri(stu, x)) || (asmNumOf(x.no) - asmNumOf(y.no)))
+    .slice(0, Math.max(0, n | 0));
+}
+/** 全班有多少人这道题丢了一半以上的分 */
+function asmNeedCount(q) {
+  return asmStuList().filter(s => {
+    const l = asmLoss(s, q);
+    return l !== null && l >= 0.5;
+  }).length;
+}
+/** 要出的卷子：[{name, stu, list}] */
+function asmPapers() {
+  const a = state.asm;
+  const list = asmList();
+  if (a.scope === 'class' && asmStuList().length) {
+    return asmStuList().map(stu => ({ name: stu.姓名, stu: stu, list: asmPickFor(stu, list, a.target) }));
+  }
+  const stu = asmStu(a.stu);
+  return [{
+    name: stu ? stu.姓名 : '',
+    stu: stu,
+    list: list.filter(q => a.picked.indexOf(q.no) >= 0),
+  }];
+}
+function asmPaperSum(list, a) {
+  const arr = list || [];
+  return {
+    n: arr.length,
+    total: arr.reduce((s, q) => s + (q.score || 0), 0),
+    big: arr.filter(q => q.type === '非选择').length,
+    ten: (a && a.minutes) || 20,
+  };
+}
+/** 一份卷子的正文；opt.answers 可覆盖是否带答案（导出时答案统一放最后一页） */
+function asmPaperHtml(po, a, opt) {
+  const list = (po && po.list) || [];
+  const o = opt || {};
+  const showAns = ('answers' in o) ? o.answers : !!(a && a.answers);
+  const title = ((a && a.title) || '').trim() || '化学 · 专项限时练';
+  const s = asmPaperSum(list, a);
+  const cls = (DATA.班级 && DATA.班级.名称) || '';
+  const who = (po && po.name) || '';
+  if (!list.length) {
+    const noStu = !asmStuList().length;
+    return (who ? '<div class="pp-name">' + esc(who) + '</div>' : '') +
+      '<div class="pp-t">' + esc(title) + '</div>' +
+      '<div class="asm-empty">' + (noStu
+        ? '还没有学生成绩。<br>先在右上角「导入成绩」，这里才有学生可以出卷。'
+        : ((a && a.scope === 'one')
+          ? '还没选题。<br>在中间勾几道，或点「按掌握率挑满」。'
+          : '这个人的题池是空的。<br>把左边的知识点或题型放宽一点。')) + '</div>';
+  }
+  let h = (who ? '<div class="pp-name">' + esc(who) + '</div>' : '') +
+    '<div class="pp-t">' + esc(title) + '</div>' +
+    '<div class="pp-line">' + esc(cls) + ' · 化学 · 共 ' + s.n + ' 题 · 满分 ' + s.total +
+    ' 分 · 建议 ' + s.ten + ' 分钟</div>';
+  if (!who) h += '<div class="pp-line">姓名：____________　　得分：________</div>';
+  h += list.map((q, i) => '<div class="pp-q"><span class="n">' + (i + 1) + '.</span>' +
+    '<span class="x">' + esc(q.stem) + '</span>' +
+    '<span class="m">（' + q.score + ' 分）</span></div>').join('');
+  if (showAns) {
+    h += '<div class="pp-ans"><div class="h">答案与解析</div>' +
+      list.map((q, i) => '<div class="pp-a">' + (i + 1) + '. 【' + esc(q.no) + '】' + esc(q.ans || '—') + '</div>').join('') +
+      '</div>';
+  }
+  return h;
+}
+function asmViewIndex(papers) {
+  const a = state.asm;
+  return Math.max(0, Math.min(papers.length - 1, a.view | 0));
+}
+/** 文件名里去掉 Windows 不认的字符 */
+function asmSafeName(s) {
+  return String(s || '').replace(/[\\/:*?"<>|\r\n]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || '小卷';
+}
+/* 导出用样式：Word（.doc + HTML）与打印共用，不依赖页面 CSS */
+const ASM_DOC_CSS = ''
+  + '@page{size:A4;margin:18mm 16mm;}\n'
+  + 'body{font-family:"Microsoft YaHei","PingFang SC",SimSun,serif;font-size:11pt;line-height:1.7;color:#111;margin:0;}\n'
+  + '.pp{page-break-after:always;}\n'
+  + '.pp:last-child{page-break-after:auto;}\n'
+  + '.pp-name{font-size:15pt;font-weight:700;margin:0 0 2mm;}\n'
+  + '.pp-t{font-size:13pt;font-weight:700;margin:0 0 1.5mm;}\n'
+  + '.pp-line{font-size:10pt;color:#333;margin:0 0 4mm;}\n'
+  + '.pp-q{margin:0 0 3.5mm;}\n'
+  + '.pp-q .n{font-weight:700;}\n'
+  + '.pp-q .m{color:#444;}\n'
+  + '.pp-ans{page-break-before:always;border-top:1px dashed #999;padding-top:3mm;}\n'
+  + '.pp-ans .h{font-weight:700;margin:0 0 2mm;}\n'
+  + '.pp-a{margin:0 0 2mm;font-size:10.5pt;}\n';
+/** 拼一份可导出的 html：每人一页，答案合并在最后一页 */
+function buildAsmDoc() {
+  const a = state.asm;
+  const papers = asmPapers();
+  if (!papers.length) return { error: '还没有可出的卷子。' };
+  const filled = papers.filter(p => p.list.length);
+  if (!filled.length) {
+    return { error: (a.scope === 'class')
+      ? '题池里没有题目，先把左边的知识点放宽一点。'
+      : '一道题都没选，卷子是空的。' };
+  }
+  const title = (a.title || '').trim() || '化学 · 专项限时练';
+  const multi = a.scope === 'class';
+  let body = filled.map(po => '<div class="pp">' + asmPaperHtml(po, a, { answers: false }) + '</div>').join('\n');
+  if (a.answers) {
+    const seen = {};
+    const union = [];
+    filled.forEach(po => po.list.forEach(q => { if (!seen[q.no]) { seen[q.no] = 1; union.push(q); } }));
+    union.sort((x, y) => asmNumOf(x.no) - asmNumOf(y.no));
+    body += '\n<div class="pp"><div class="pp-ans"><div class="h">答案与解析（' + union.length + ' 题）</div>' +
+      union.map((q, i) => '<div class="pp-a">' + (i + 1) + '. 【' + esc(q.no) + '】' + esc(q.ans || '—') + '</div>').join('') +
+      '</div></div>';
+  }
+  const head = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8" />\n'
+    + '<title>' + esc(asmSafeName(title)) + '</title>\n<style>\n' + ASM_DOC_CSS + '</style>\n</head>\n<body>\n';
+  const html = head + body + '\n</body>\n</html>\n';
+  const fileName = asmSafeName(multi
+    ? '化学-全班个性小卷-' + title
+    : '化学-小卷-' + (filled[0].name || '') + '-' + title) + '.doc';
+  return { error: '', html: html, fileName: fileName, count: filled.length, papers: filled };
+}
 
 /** 左栏条件筛完、按当前排序排好的题池 */
 function asmList() {
@@ -1787,6 +1993,36 @@ function asmRateClass(r) { return r < 40 ? 'lo' : (r < 60 ? 'mid' : ''); }
 
 function renderAsm() {
   const a = state.asm;
+  const stus = asmStuList();
+  const hasStu = stus.length > 0;
+  const isClass = a.scope !== 'one';
+
+  // 左：出卷对象（全班各一张 / 只出一个人）
+  document.querySelectorAll('#asmScopeSeg .seg-btn').forEach(b =>
+    b.classList.toggle('on', b.dataset.asmScope === (isClass ? 'class' : 'one')));
+  const stuSel = document.getElementById('asmStu');
+  if (stuSel) {
+    if (!hasStu || isClass) {
+      stuSel.style.display = 'none';
+    } else {
+      stuSel.style.display = '';
+      stuSel.innerHTML = stus.map(s => '<option value="' + esc(s.姓名) + '">' + esc(s.姓名) +
+        ' · 班第 ' + s.班名次 + '</option>').join('');
+      stuSel.value = (asmStu(a.stu) || {}).姓名 || '';
+    }
+  }
+  const scopeTip = document.getElementById('asmScopeTip');
+  if (scopeTip) {
+    if (!hasStu) {
+      scopeTip.innerHTML = '还没有学生成绩：先在右上角「导入成绩」，才能按人出卷。';
+    } else if (isClass) {
+      scopeTip.innerHTML = '按<b>每个人的错题</b>各挑一份：全班 <b>' + stus.length +
+        '</b> 份，每人都不一样，右边可换着看。';
+    } else {
+      scopeTip.innerHTML = '只给 <b>' + esc((asmStu(a.stu) || {}).姓名 || '') +
+        '</b> 挑题：中间点卡片手动加减。';
+    }
+  }
 
   // 左：知识点勾选（带每条的题数）
   const kpBox = document.getElementById('asmKpList');
@@ -1803,52 +2039,78 @@ function renderAsm() {
   // 中：题池
   const pool = document.getElementById('asmPool');
   const list = asmList();
+  const papers = asmPapers();
+  const sv = asmViewIndex(papers);
+  const cur = papers[sv] || { name: '', list: [] };
+  const oneStu = (!isClass && hasStu) ? asmStu(a.stu) : null;
   if (pool) {
     pool.innerHTML = list.length ? list.map(q => {
       const on = a.picked.indexOf(q.no) >= 0;
-      return '<div class="qcard' + (on ? ' on' : '') + '" data-no="' + q.no + '">' +
-        '<div class="q1"><span class="qno">' + q.no + '</span>' +
-        '<span class="qkp">' + q.name + '</span>' +
-        '<span class="qtype">' + q.type + ' · ' + q.score + ' 分</span>' +
+      let badge;
+      if (oneStu) {
+        const got = asmGot(oneStu, q);
+        if (got === null) badge = '<span class="who none">这次没这题的数据</span>';
+        else if (got >= q.score) badge = '<span class="who ok">✓ 他做对了</span>';
+        else badge = '<span class="who bad">✗ 他丢了 ' + (Math.round((q.score - got) * 10) / 10) + ' 分</span>';
+      } else if (hasStu) {
+        badge = '<span class="who">' + asmNeedCount(q) + ' 人丢分过半</span>';
+      } else {
+        badge = '<span class="who none">导入成绩后可按人挑题</span>';
+      }
+      return '<div class="qcard' + (on ? ' on' : '') + '" data-no="' + esc(q.no) + '">' +
+        '<div class="q1"><span class="qno">' + esc(q.no) + '</span>' +
+        '<span class="qkp">' + esc(q.name) + '</span>' +
+        '<span class="qtype">' + esc(q.type) + ' · ' + q.score + ' 分</span>' +
         '<span class="pick">✓</span></div>' +
         '<div class="stem">' + esc(q.stem) + '</div>' +
         '<div class="qmeta">' +
-        '<span class="rate ' + asmRateClass(q.rate) + '">得分率 ' + q.rate.toFixed(1) + '%' +
+        '<span class="rate ' + asmRateClass(q.rate) + '">全班 ' + q.rate.toFixed(1) + '%' +
         '<span class="bar"><i style="width:' + q.rate + '%"></i></span></span>' +
-        '<span>零分 ' + q.zero + ' 人</span></div></div>';
+        badge + '</div></div>';
     }).join('') : '<div class="asm-empty">没有符合条件的题。<br>把左边的知识点或题型放宽一点。</div>';
   }
 
   // 计数
-  const picked = asmPicked();
-  const total = picked.reduce((s, q) => s + q.score, 0);
   const cnt = document.getElementById('asmCount');
-  if (cnt) cnt.innerHTML = '已选 <b>' + picked.length + '</b> / 目标 ' + a.target + ' 题';
+  if (cnt) {
+    cnt.innerHTML = isClass
+      ? '题池 <b>' + list.length + '</b> 道 · 给 <b>' + papers.length + '</b> 人各挑 <b>' + a.target + '</b> 题'
+      : '已选 <b>' + cur.list.length + '</b> / 目标 ' + a.target + ' 题';
+  }
   const hint = document.getElementById('centerHint');
-  if (hint && state.mode === 'assemble') hint.textContent = '已选 ' + picked.length + ' 题 · 目标 ' + a.target + ' 题';
+  if (hint && state.mode === 'assemble') {
+    hint.textContent = isClass
+      ? ('每人一张 · 共 ' + papers.length + ' 份 · 右边翻着看')
+      : ('已选 ' + cur.list.length + ' 题 · 目标 ' + a.target + ' 题');
+  }
 
-  // 右：结构
+  // 右：这份卷子的结构
+  const s = asmPaperSum(cur.list, a);
   const sum = document.getElementById('asmSum');
   if (sum) {
-    sum.innerHTML = '<div><b>' + picked.length + '</b>题</div>' +
-      '<div><b>' + total + '</b>分</div>' +
-      '<div><b>' + (a.minutes || 20) + '</b>分钟</div>' +
-      '<div><b>' + picked.filter(q => q.type === '非选择').length + '</b>道大题</div>';
+    sum.innerHTML = (isClass ? '<div><b>' + papers.length + '</b>份</div>' : '') +
+      '<div><b>' + s.n + '</b>题</div>' +
+      '<div><b>' + s.total + '</b>分</div>' +
+      '<div><b>' + s.ten + '</b>分钟</div>' +
+      (s.big ? '<div><b>' + s.big + '</b>道大题</div>' : '');
+  }
+
+  // 右：换人看
+  const nav = document.getElementById('asmNav');
+  if (nav) {
+    const show = isClass && papers.length > 1;
+    nav.style.display = show ? '' : 'none';
+    if (show) {
+      nav.innerHTML = '<button class="tbtn" data-asm-page="-1"' + (sv <= 0 ? ' disabled' : '') + '>‹</button>' +
+        '<span class="who"><b>' + esc(cur.name) + '</b> · 第 ' + (sv + 1) + ' / ' + papers.length + ' 份' +
+        ' · <span class="bads">' + s.n + ' 题</span></span>' +
+        '<button class="tbtn" data-asm-page="1"' + (sv >= papers.length - 1 ? ' disabled' : '') + '>›</button>';
+    }
   }
 
   // 右：纸面预览
   const paper = document.getElementById('asmPaper');
-  if (paper) {
-    const title = (a.title || '').trim() || '化学 · 专项限时练';
-    paper.innerHTML = '<div class="pp-t">' + esc(title) + '</div>' +
-      '<div class="pp-s">' + (a.answers ? '含答案页' : '不含答案页') + ' · 共 ' + picked.length + ' 题 · ' +
-      total + ' 分 · ' + (a.minutes || 20) + ' 分钟</div>' +
-      (picked.length ? picked.map((q, i) =>
-        '<div class="pp-q"><span class="n">' + (i + 1) + '.</span>' +
-        '<span class="x">' + esc(q.stem) + '</span>' +
-        '<span class="m">(' + q.score + '分)</span></div>').join('')
-        : '<div class="pp-empty">还没选题。<br>在中间勾几道，或点「按掌握率挑满」。</div>');
-  }
+  if (paper) paper.innerHTML = asmPaperHtml(cur, a);
 
   const tIn = document.getElementById('asmTitle');
   if (tIn && tIn.value !== a.title) tIn.value = a.title;
@@ -1913,16 +2175,46 @@ function asmInit() {
   });
   const search = document.getElementById('asmSearch');
   search.addEventListener('input', () => { state.asm.q = search.value; renderAsm(); });
+  // 出卷对象：全班各一张 / 只出一个人
+  document.getElementById('asmScopeSeg').addEventListener('click', e => {
+    const b = e.target.closest('[data-asm-scope]');
+    if (!b) return;
+    state.asm.scope = b.dataset.asmScope;
+    state.asm.view = 0;
+    renderAsm(); save();
+  });
+  const stuSel = document.getElementById('asmStu');
+  stuSel.addEventListener('change', () => {
+    state.asm.stu = stuSel.value;
+    state.asm.view = 0;
+    renderAsm(); save();
+  });
+  document.getElementById('asmNav').addEventListener('click', e => {
+    const b = e.target.closest('[data-asm-page]');
+    if (!b || b.disabled) return;
+    state.asm.view = Math.max(0, (state.asm.view | 0) + parseInt(b.dataset.asmPage, 10));
+    renderAsm(); save();
+  });
   document.getElementById('asmAuto').addEventListener('click', () => {
-    state.asm.picked = asmList().slice(0, state.asm.target).map(q => q.no);
+    if (state.asm.scope === 'class') {
+      return asmToast('全班模式本来就是按每个人的错题自动挑的。想亲手挑，把左上「出卷对象」切成「只出一个人」。');
+    }
+    const stu = asmStu(state.asm.stu);
+    state.asm.picked = asmPickFor(stu, asmList(), state.asm.target).map(q => q.no);
     renderAsm(); save();
   });
   document.getElementById('asmClear').addEventListener('click', () => {
+    if (state.asm.scope === 'class') {
+      return asmToast('全班模式每人的卷子是自动挑的，不用清空。');
+    }
     state.asm.picked = []; renderAsm(); save();
   });
   document.getElementById('asmPool').addEventListener('click', e => {
     const card = e.target.closest('.qcard');
     if (!card) return;
+    if (state.asm.scope === 'class') {
+      return asmToast('全班模式每人一张是自动挑的。想亲手挑题，把左上「出卷对象」切成「只出一个人」。');
+    }
     const no = card.dataset.no, i = state.asm.picked.indexOf(no);
     if (i >= 0) state.asm.picked.splice(i, 1); else state.asm.picked.push(no);
     renderAsm(); save();
@@ -1931,12 +2223,29 @@ function asmInit() {
   titleIn.addEventListener('input', () => { state.asm.title = titleIn.value; renderAsm(); save(); });
   const ansCb = document.getElementById('asmAnswers');
   ansCb.addEventListener('change', () => { state.asm.answers = ansCb.checked; renderAsm(); save(); });
-  document.getElementById('asmExport').addEventListener('click', () => asmToast('导出要等 M5：这里先把题目、分值、版面定下来，导出接上后不用改界面。'));
-  document.getElementById('asmPrint').addEventListener('click', () => asmToast('打印同理，等 M5 一起接。现在可以先看右边这张纸。'));
+  document.getElementById('asmExport').addEventListener('click', () => {
+    const r = buildAsmDoc();
+    if (r.error) return asmToast(r.error);
+    downloadFile(r.fileName, r.html, 'application/msword');
+    asmToast('已导出 ' + r.count + ' 份' + (r.count > 1 ? '（一人一页，答案合并在最后一页）' : '') +
+      '：' + r.fileName + '。在浏览器下载里找它，双击用 Word 打开。');
+  });
+  document.getElementById('asmPrint').addEventListener('click', () => {
+    const r = buildAsmDoc();
+    if (r.error) return asmToast(r.error);
+    if (printHtml(r.html)) {
+      asmToast('已打开打印窗口（共 ' + r.count + ' 份）。要存 PDF，在「目标打印机」里选「另存为 PDF」。');
+    } else {
+      downloadFile(r.fileName.replace(/\.doc$/, '.html'), r.html, 'text/html');
+      asmToast('浏览器拦住了打印窗口，已改为下载 html：双击打开后按 Ctrl+P 打印。');
+    }
+  });
 
-  // 第一次进来给一份默认的卷子：得分率最低的几道
-  if (!state.asm.picked.length) {
-    state.asm.picked = asmList().slice(0, state.asm.target).map(q => q.no);
+  // 学生的默认对象：第一个（没有成绩时留空）
+  if (!state.asm.stu && asmStuList().length) state.asm.stu = asmStuList()[0].姓名;
+  // 第一次进「只出一个人」时给一份默认的卷子：这个人最该练的几道
+  if (state.asm.scope !== 'class' && !state.asm.picked.length) {
+    state.asm.picked = asmPickFor(asmStu(state.asm.stu), asmList(), state.asm.target).map(q => q.no);
   }
   // 控件初值同步到 state
   sortSel.value = state.asm.sort;
@@ -1992,7 +2301,7 @@ function setMode(m) {
   document.getElementById('centerHint').textContent = isS ? '' : (isA ? '可直接提问' : '面向单个学生');
   document.getElementById('rightTitle').textContent = isS ? '小卷预览' : (isA ? '成绩分析' : '方案与复核');
   document.getElementById('rightNote').textContent = isS
-    ? '演示：题库检索（M4）未接，题目池为 09 月考化学 8 题'
+    ? '按人出卷：题库检索（M4）未接，题目池为 09 月考化学 8 题'
     : (isA ? '数据为逐题统计结果，可直接使用'
            : '⚠ 标黄内容为 AI 推断，请人工确认后再发给学生');
 

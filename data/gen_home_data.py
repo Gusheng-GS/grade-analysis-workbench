@@ -88,7 +88,9 @@ def load_detail():
             for j, nm in enumerate(item_names):
                 idx = 5 + j
                 if idx < len(r):
-                    scores[nm] = num(r[idx])
+                    v = num(r[idx])
+                    if v is not None:
+                        scores[nm] = round(v, 1)
             students.append({
                 "考号": str(r[2]).strip() if len(r) > 2 else "",
                 "姓名": str(r[3]).strip(),
@@ -217,6 +219,14 @@ def build():
     # ── 学生名单：分数取官方成绩表（含赋分后的总分）─────────────────
     # 明细表只用于题目级分析，不用于求和（选考科目赋分制会算错）
     roster = []
+    # 姓名 -> { 科目: { 题号: 得分 } }，给组卷台按人挑题用
+    detail_by_name = {}
+    for dk, dv in detail.items():
+        for ds in dv["students"]:
+            nm = ds["姓名"]
+            if not nm:
+                continue
+            detail_by_name.setdefault(nm, {})[dk] = ds["scores"]
     base = detail["数学"]["students"]
     for stu in base:
         name = stu["姓名"]
@@ -237,6 +247,7 @@ def build():
             "选科": off.get("选科", stu.get("选科", "")),
             "总分": round(total, 1),
             "各科": per_subject,
+            "小题": detail_by_name.get(name, {}),
         })
 
     roster.sort(key=lambda x: -x["总分"])

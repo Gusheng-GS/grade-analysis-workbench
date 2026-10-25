@@ -141,10 +141,18 @@ var WuyueParse = (function () {
       for (var r = 2; r < rows.length; r++) {
         var row = rows[r];
         if (cell(row, 3) === '') continue;
+        // 每人每题的得分：组卷台"按各人错题挑题"要用（analysis 表只有全班平均）
+        var scores = {};
+        for (var q = 0; q < itemNames.length; q++) {
+          if (!itemNames[q]) continue;
+          var qv = pyRound1(num(cell(row, 5 + q)));
+          if (qv !== null && qv !== undefined) scores[itemNames[q]] = qv;
+        }
         students.push({
           考号: cell(row, 2),
           姓名: cell(row, 3),
           选科: cell(row, 4),
+          得分: scores,
         });
       }
       out[subj] = { items: itemNames, parents: parents, students: students };
@@ -297,6 +305,19 @@ var WuyueParse = (function () {
       baseNames = official.officialOrder.slice();
     }
 
+    // 姓名 -> { 科目: { 题号: 得分 } }，给组卷台按人挑题用
+    var detailByName = {};
+    for (var dk in detail) {
+      if (!Object.prototype.hasOwnProperty.call(detail, dk)) continue;
+      var dsList = detail[dk].students || [];
+      for (var ds = 0; ds < dsList.length; ds++) {
+        var dsName = dsList[ds].姓名;
+        if (!dsName) continue;
+        if (!detailByName[dsName]) detailByName[dsName] = {};
+        detailByName[dsName][dk] = dsList[ds].得分 || {};
+      }
+    }
+
     var roster = [];
     for (var i = 0; i < baseNames.length; i++) {
       var name = baseNames[i];
@@ -323,6 +344,7 @@ var WuyueParse = (function () {
         选科: off.选科 || '',
         总分: pyRound1(total),
         各科: perSubject,
+        小题: detailByName[name] || {},
       });
     }
     if (!roster.length) throw new Error('没有解析到任何学生，请确认选的是五岳导出的班级成绩文件夹');

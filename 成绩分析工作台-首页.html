@@ -2417,16 +2417,32 @@ const ASM_POOL = [
 })();
 /** 题干里的 [图N] 换成内联图片；没这张图就留一个占位，不装作有
     题目里的图有两种：句中的公式（窄、矮，要跟着文字走）和独立的一张图（宽）。
-    题库正文里有宽高就按宽高判断，老格式（只有字符串）一律当独立图片。 */
+    题库正文里有宽高就按宽高判断，老格式（只有字符串）一律当独立图片。
+
+    重点：这里必须写死 width/height 属性。Word 打开这种 .doc 时不认
+    max-height:1.9em 之类的 CSS，但会照 width/height 属性按 px 排版；
+    只给 CSS 的话它会把图按原始宽度拉满、高度却按 max-height 压扁，比例就毁了。 */
 function asmRich(t, q) {
   const imgs = (q && q.imgs) || {};
   return esc(String(t == null ? '' : t)).replace(/\[图(\d+)\]/g, function (m, n) {
     const it = imgs[n];
     if (!it) return '<span class="qi-miss">〔图' + n + '〕</span>';
     const src = typeof it === 'string' ? it : it.u;
-    // 宽 < 400 且不太高 → 句中的公式；否则按独立图片另起一行
-    const inl = (typeof it === 'object' && it.w < 400 && it.h <= 160) ? ' qi-in' : '';
-    return '<img class="qi' + inl + '" src="' + src + '" alt="图' + n + '">';
+    let cls = '', dw = 0, dh = 0;
+    if (typeof it === 'object' && it.w && it.h) {
+      if (it.w < 400 && it.h <= 160) {
+        // 句中的公式：统一按 24px 高显示（约 1.6 倍字号），宽按原比例算，不拉伸
+        cls = ' qi-in';
+        dh = 24;
+        dw = Math.max(6, Math.round(it.w * dh / it.h));
+      } else {
+        // 独立图片：按原尺寸显示，太宽时缩到 640（宽度上限，高度同比例）
+        dw = Math.min(it.w, 640);
+        dh = Math.max(1, Math.round(it.h * dw / it.w));
+      }
+    }
+    const size = dw && dh ? ' width="' + dw + '" height="' + dh + '"' : '';
+    return '<img class="qi' + cls + '" src="' + src + '"' + size + ' alt="图' + n + '">';
   });
 }
 /** 选项逐条排开（选择题才有；非选择题是空数组） */

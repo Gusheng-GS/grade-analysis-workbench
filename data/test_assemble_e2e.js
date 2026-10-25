@@ -240,6 +240,11 @@ function load(seed) {
     check('导出的题干/选项带原图', /class="qi/.test(docClass.html));
     check('句中的公式排成行内图', /class="qi qi-in"/.test(docClass.html));
     check('宽图另起一行', /class="qi" src=/.test(docClass.html));
+    // Word 不认 CSS 的 max-height，图片必须有写死的 width/height，否则比例会被拉坏
+    const imgs = docClass.html.match(/<img[^>]*>/g) || [];
+    const noSize = imgs.filter((t) => !/width="\d+" height="\d+"/.test(t));
+    check('每张图都写了 width/height', imgs.length > 0 && noSize.length === 0,
+      '缺尺寸 ' + noSize.length + '/' + imgs.length);
   } else {
     console.log('    （没有题库正文 data/asm_bank.js，跳过选项/图片相关检查）');
   }

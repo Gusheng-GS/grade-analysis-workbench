@@ -56,10 +56,16 @@ function req(method, p, body, headers) {
 
 (async () => {
   // ── 准备：临时"程序目录" ──
-  const TMPHOME = path.join(ROOT, "_tmp_run", "_tmp_update_agent");
-  fs.rmSync(TMPHOME, { recursive: true, force: true });
-  fs.mkdirSync(TMPHOME, { recursive: true });
-  const home = fs.mkdtempSync(path.join(TMPHOME, "wb-upd-"));
+  // 优先用系统临时目录：有些受限环境（比如带沙箱的会话）不允许在仓库里新建目录，
+  // 但系统临时目录总是可写；实在不行再退回 build/。
+  let BASE_TMP = os.tmpdir();
+  try {
+    fs.mkdtempSync(path.join(BASE_TMP, "wb-probe-"));
+  } catch (e) {
+    BASE_TMP = path.join(ROOT, "build");
+    fs.mkdirSync(BASE_TMP, { recursive: true });
+  }
+  const home = fs.mkdtempSync(path.join(BASE_TMP, "wb-upd-"));
   fs.mkdirSync(path.join(home, "update"), { recursive: true });
   fs.mkdirSync(path.join(home, "_开发文件"), { recursive: true });
   fs.writeFileSync(path.join(home, "version.txt"), "0.1.1\n", "utf8");

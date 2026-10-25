@@ -202,6 +202,14 @@ print("截图内容：分析台 1 问 1 答、方案 1 份（%s），密钥 1 �
 # ── 5) 把三场考试预置进 localStorage（放在 </head> 之前，页面脚本之前执行）──
 with open(OUT, encoding="utf-8") as f:
     page = f.read()
+# 演示页要把题库正文掏空：那是老师试卷的真实题目/图片，不能出现在公开材料里。
+# 掏空后组卷台仍然能用（题目池、挑题、导出都在），只是小卷上只有一句题干。
+page, n_bank = re.subn(r"window\.__ASM_BANK__ = \[.*?\];", "window.__ASM_BANK__ = [];",
+                       page, flags=re.S)
+if n_bank:
+    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+        f.write(page)
+    print("演示页已去掉题库正文（%d 处），避免公开材料里出现真实试题" % n_bank)
 if "</head>" not in page:
     raise SystemExit("页面里找不到 </head>，注入失败")
 with open(SEED_JSON, encoding="utf-8") as f:

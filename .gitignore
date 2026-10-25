@@ -15,6 +15,10 @@ _tmp_run/
 # ── 生成的数据文件 ──
 # 说明：data/home_data.json 是由 gen_home_data.py 从 fixtures 生成的**合成样例**，
 # 为了让拉下来就能跑测试，它是提交的（内容不含任何真实学生信息）。
+# data/asm_bank.js 是 data/build_bank.py 从**老师自己的试卷**生成的题库正文
+# （题干、选项、图片、答案），属于他人材料，不能进公开仓库；没有它组卷台照样能用，
+# 只是选题卡片和小卷上只有一句题干。
+data/asm_bank.js
 
 # ── 截图用演示页的中间产物（由 data/make_demo_page.py 生成，可随时重建）──
 data/demo_home_data.json

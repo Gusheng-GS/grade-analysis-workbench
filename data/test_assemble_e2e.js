@@ -232,6 +232,18 @@ function load(seed) {
   check('答案页列出题号', /【单选7】/.test(docClass.html));
   check('导出内容带学生姓名', docClass.html.includes(papers[0].name));
 
+  // 小卷里不能只有题干（以前就是这个 bug：导出的是"壳子"）
+  const hasBank = (w.eval('(window.__ASM_BANK__ || []).length') || 0) > 0;
+  check('导出的题带分值', /class="m"[^>]*>（\d+ 分）/.test(docClass.html));
+  if (hasBank) {
+    check('导出的选择题带 ABCD 选项', /class="pp-o"[^>]*>[ABCD]．/.test(docClass.html));
+    check('导出的题干/选项带原图', /class="qi/.test(docClass.html));
+    check('句中的公式排成行内图', /class="qi qi-in"/.test(docClass.html));
+    check('宽图另起一行', /class="qi" src=/.test(docClass.html));
+  } else {
+    console.log('    （没有题库正文 data/asm_bank.js，跳过选项/图片相关检查）');
+  }
+
   w.eval(`(function(){ state.asm.scope='one'; state.asm.stu=${JSON.stringify(target)};
     state.asm.picked=['单选7','单选13']; renderAsm(); })()`);
   const docOne = w.eval('buildAsmDoc()');

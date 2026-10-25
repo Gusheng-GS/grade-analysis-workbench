@@ -15,6 +15,7 @@ v3 改动（按用户要求）：
 """
 import json
 import os
+import re
 import sys
 
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -772,10 +773,15 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
 }
 .asm-paper .pp-t { font-size: 14.5px; font-weight: 700; text-align: center; margin-bottom: 3px; }
 .asm-paper .pp-s { font-size: 10.5px; color: #666; text-align: center; margin-bottom: 13px; }
-.asm-paper .pp-q { display: flex; gap: 6px; font-size: 11.5px; line-height: 1.8; margin-bottom: 6px; }
-.asm-paper .pp-q .n { flex: 0 0 auto; font-weight: 600; }
+.asm-paper .pp-q { font-size: 11.5px; line-height: 1.8; margin-bottom: 8px; }
+.asm-paper .pp-q .pq-h .n { font-weight: 600; margin-right: 2px; }
 .asm-paper .pp-q .x { color: #333; }
 .asm-paper .pp-q .m { color: #888; font-size: 10px; }
+.asm-paper .pp-opts { margin: 2px 0 0 12px; }
+.asm-paper .pp-o { color: #333; font-size: 11px; line-height: 1.75; }
+.asm-paper .qi { display: block; max-width: 100%; height: auto; margin: 4px 0; }
+.asm-paper .qi-in { display: inline-block; vertical-align: -0.18em; max-height: 1.9em; width: auto; margin: 0 1px; }
+.asm-paper .qi-miss { color: #999; font-size: 10px; }
 .asm-paper .pp-empty { text-align: center; color: #999; font-size: 12px; padding: 40px 0; }
 .asm-foot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--stroke); }
 
@@ -1544,6 +1550,11 @@ html[data-theme="dark"] .asm-paper { background: #f2f2f2; box-shadow: 0 1px 4px 
 /* ── 五岳导出解析器（和 Node 测试跑的是同一份代码）── */
 __WUYUE_PARSE__
 
+/* ── 题库正文：题干全文 / 选项 / 图（base64）/ 答案与解析 ──
+   由 data/build_bank.py 生成（内容来自老师试卷，不进 git）；
+   没有这个文件时这里是空数组，组卷台就退回只有"题干首句"的样子。 */
+__BANK_JS__
+
 /* 内置数据只是"兜底初值"：默认是空的，老师导入成绩后会被整体替换。
    用 let 不用 const，就是为了导入时能换掉它。 */
 let DATA = __DATA__;
@@ -1803,6 +1814,48 @@ const ASM_POOL = [
   { no: '16',     subj: '化学', kp: '选必1-1.2', name: '化学反应与热能', type: '非选择', score: 13, rate: 63.8, zero: 2,  ans: '见解析（盖斯定律求 ΔH，注意系数与状态，部分答案含图。）', stem: '完成下列问题：反应①消耗 8 g CH₄(g) 吸收的热量' },
   { no: '单选8',  subj: '化学', kp: '选必1-1.3', name: '化学反应与电能', type: '单选',   score: 3,  rate: 67.3, zero: 13, ans: 'D（原电池/电解池的电极判断与离子移动方向。）', stem: '下列实验操作不能达到实验目的的是' },
 ];
+/* ── 题库正文并进题池 ──
+   题池里存的是「考试统计」（得分率、谁丢了分），题库里存的是「题目本身」
+   （题干全文、选项、图、答案与解析）。两边按题号对齐；没有题库时，
+   原有字段还在，只是小卷上只有一句题干——功能退化，不会报错。 */
+(function mergeBank() {
+  const bank = (typeof window !== 'undefined' && window.__ASM_BANK__) || [];
+  const by = {};
+  bank.forEach(function (b) { if (b && b.no) by[b.no] = b; });
+  ASM_POOL.forEach(function (q) {
+    const b = by[q.no];
+    if (!b) return;
+    q.bank = b;
+    if (b.text) q.stem = b.text;
+    q.opts = b.opts || [];
+    q.imgs = b.imgs || {};
+    if (b.ans) q.ans = b.ans;
+    q.detail = b.detail || '';
+  });
+})();
+/** 题干里的 [图N] 换成内联图片；没这张图就留一个占位，不装作有
+    题目里的图有两种：句中的公式（窄、矮，要跟着文字走）和独立的一张图（宽）。
+    题库正文里有宽高就按宽高判断，老格式（只有字符串）一律当独立图片。 */
+function asmRich(t, q) {
+  const imgs = (q && q.imgs) || {};
+  return esc(String(t == null ? '' : t)).replace(/\[图(\d+)\]/g, function (m, n) {
+    const it = imgs[n];
+    if (!it) return '<span class="qi-miss">〔图' + n + '〕</span>';
+    const src = typeof it === 'string' ? it : it.u;
+    // 宽 < 400 且不太高 → 句中的公式；否则按独立图片另起一行
+    const inl = (typeof it === 'object' && it.w < 400 && it.h <= 160) ? ' qi-in' : '';
+    return '<img class="qi' + inl + '" src="' + src + '" alt="图' + n + '">';
+  });
+}
+/** 选项逐条排开（选择题才有；非选择题是空数组） */
+function asmOptsHtml(q) {
+  const opts = (q && q.opts) || [];
+  if (!opts.length) return '';
+  return '<div class="pp-opts">' + opts.map(function (o) {
+    return '<div class="pp-o">' + asmRich(o, q) + '</div>';
+  }).join('') + '</div>';
+}
+
 const ASM_KPS = [
   { id: '选必1-2.1', name: '反应方向与限度' },
   { id: '选必1-1.2', name: '化学反应与热能' },
@@ -1911,12 +1964,14 @@ function asmPaperHtml(po, a, opt) {
     '<div class="pp-line">' + esc(cls) + ' · 化学 · 共 ' + s.n + ' 题 · 满分 ' + s.total +
     ' 分 · 建议 ' + s.ten + ' 分钟</div>';
   if (!who) h += '<div class="pp-line">姓名：____________　　得分：________</div>';
-  h += list.map((q, i) => '<div class="pp-q"><span class="n">' + (i + 1) + '.</span>' +
-    '<span class="x">' + esc(q.stem) + '</span>' +
-    '<span class="m">（' + q.score + ' 分）</span></div>').join('');
+  h += list.map((q, i) => '<div class="pp-q"><div class="pq-h"><span class="n">' + (i + 1) + '.</span> ' +
+    asmRich(q.stem, q) +
+    '<span class="m">（' + q.score + ' 分）</span></div>' + asmOptsHtml(q) + '</div>').join('');
   if (showAns) {
     h += '<div class="pp-ans"><div class="h">答案与解析</div>' +
-      list.map((q, i) => '<div class="pp-a">' + (i + 1) + '. 【' + esc(q.no) + '】' + esc(q.ans || '—') + '</div>').join('') +
+      list.map((q, i) => '<div class="pp-a">' +
+        '<div class="pa-h">' + (i + 1) + '. 【' + esc(q.no) + '】答案：' + esc(q.ans || '—') + '</div>' +
+        (q.detail ? '<div class="pa-d">' + asmRich(q.detail, q) + '</div>' : '') + '</div>').join('') +
       '</div>';
   }
   return h;
@@ -1941,6 +1996,13 @@ const ASM_DOC_CSS = ''
   + '.pp-q{margin:0 0 3.5mm;}\n'
   + '.pp-q .n{font-weight:700;}\n'
   + '.pp-q .m{color:#444;}\n'
+  + '.pp-opts{margin:1mm 0 0 4mm;}\n'
+  + '.pp-o{margin:0 0 1mm;}\n'
+  + '.qi{display:block;max-width:100%;height:auto;margin:2mm 0;}\n'
+  + '.qi-in{display:inline-block;vertical-align:-0.18em;max-height:1.9em;width:auto;margin:0 1px;}\n'
+  + '.qi-miss{color:#666;}\n'
+  + '.pp-a .pa-h{font-weight:700;}\n'
+  + '.pp-a .pa-d{color:#333;margin:1mm 0 0 3mm;}\n'
   + '.pp-ans{page-break-before:always;border-top:1px dashed #999;padding-top:3mm;}\n'
   + '.pp-ans .h{font-weight:700;margin:0 0 2mm;}\n'
   + '.pp-a{margin:0 0 2mm;font-size:10.5pt;}\n';
@@ -1964,8 +2026,9 @@ function buildAsmDoc() {
     filled.forEach(po => po.list.forEach(q => { if (!seen[q.no]) { seen[q.no] = 1; union.push(q); } }));
     union.sort((x, y) => asmNumOf(x.no) - asmNumOf(y.no));
     body += '\n<div class="pp"><div class="pp-ans"><div class="h">答案与解析（' + union.length + ' 题）</div>' +
-      union.map((q, i) => '<div class="pp-a">' + (i + 1) + '. 【' + esc(q.no) + '】' + esc(q.ans || '—') + '</div>').join('') +
-      '</div></div>';
+      union.map((q, i) => '<div class="pp-a"><div class="pa-h">' + (i + 1) + '. 【' + esc(q.no) + '】答案：' +
+        esc(q.ans || '—') + '</div>' + (q.detail ? '<div class="pa-d">' + asmRich(q.detail, q) + '</div>' : '') +
+        '</div>').join('') + '</div></div>';
   }
   const head = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8" />\n'
     + '<title>' + esc(asmSafeName(title)) + '</title>\n<style>\n' + ASM_DOC_CSS + '</style>\n</head>\n<body>\n';
@@ -5908,8 +5971,21 @@ renderAll();
 html = HTML.replace("__DATA__", DATA_JSON)
 html = html.replace("__WUYUE_PARSE__", PARSE_JS)
 html = html.replace("__APP_VERSION__", json.dumps(APP_VERSION))
+
+# 题库正文：data/asm_bank.js 存在就嵌进来（里面有真实试卷内容，不进 git）
+BANK_FILE = os.path.join(BASE, "asm_bank.js")
+if os.path.exists(BANK_FILE):
+    with open(BANK_FILE, encoding="utf-8") as f:
+        bank_js = f.read()
+    m = re.search(r"__ASM_BANK__\s*=\s*(\[.*\]);", bank_js, re.S)
+    bank_n = len(json.loads(m.group(1))) if m else 0
+else:
+    bank_js = "window.__ASM_BANK__ = [];\n"
+    bank_n = 0
+html = html.replace("__BANK_JS__", bank_js)
 with open(OUT, "w", encoding="utf-8") as f:
     f.write(html)
 
 print("已生成:", OUT)
 print("大小: %.1f KB" % (os.path.getsize(OUT) / 1024))
+print("题库正文: %d 题%s" % (bank_n, "" if bank_n else "（data/asm_bank.js 不存在，小卷只有题干）"))

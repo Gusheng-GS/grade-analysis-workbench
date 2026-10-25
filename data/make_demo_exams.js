@@ -70,6 +70,52 @@ const records = EXAMS.map(function (cfg, idx) {
     s.总分 = round1(sum);
   });
 
+  // ── 化学逐题得分（只造组卷台用到的 8 道题）──────────────────────
+  // 演示页里组卷台的卡片上写着"得分率 12.7% / 35 人零分"这类固定数字，
+  // 所以逐题得分要照着这些数字反推：谁对谁错既要跟卡片对得上，
+  // 又要让每个人错得不完全一样（不然"每人一张卷"就没有意义了）。
+  // 做法：按"个人化学成绩 + 一次确定性随机"排个优先级，取前 N 人做对。
+  // 注意：这 8 道题的分之和不等于化学总分（只覆盖部分题目），演示够用。
+  const CHEM_ITEMS = [
+    { no: "单选7", score: 3, rate: 12.7, zero: 35 },
+    { no: "单选13", score: 3, rate: 35.0, zero: 26 },
+    { no: "单选14", score: 3, rate: 42.7, zero: 23 },
+    { no: "单选11", score: 3, rate: 47.3, zero: 21 },
+    { no: "17", score: 10, rate: 55.0, zero: 1 },
+    { no: "18", score: 14, rate: 60.7, zero: 0 },
+    { no: "16", score: 13, rate: 63.8, zero: 2 },
+    { no: "单选8", score: 3, rate: 67.3, zero: 13 },
+  ];
+
+  const chem = data.学生.map(function (s) { return Number(s.各科["化学"]) || 0; });
+  const chemMax = Math.max.apply(null, chem) || 1;
+  const chemMin = Math.min.apply(null, chem);
+  data.学生.forEach(function (s, i) {
+    // 个人能力：0（最弱）~ 1（最强），用化学成绩在班里的相对位置
+    const ability = chemMax > chemMin ? (chem[i] - chemMin) / (chemMax - chemMin) : 0.5;
+    s.小题 = s.小题 && typeof s.小题 === "object" ? s.小题 : {};
+    s.小题["化学"] = {};
+    const order = CHEM_ITEMS.map(function (it) {
+      // 0.45 看能力、0.55 看随机：能力强的人更容易做对，但不会全班一模一样
+      return { it: it, key: 0.45 * ability + 0.55 * rand() };
+    }).sort(function (a, b) { return b.key - a.key; });
+
+    order.forEach(function (o, rank) {
+      const it = o.it;
+      const n = data.学生.length;
+      let v;
+      if (it.score === 3) {
+        v = rank < n - it.zero ? 3 : 0;
+      } else {
+        // 非选择题：零分的人数按卡片上的"零分人数"，其余人给满分或一半
+        const k = n - it.zero;
+        const fullCount = Math.round(n * it.rate / 100 - k / 2);
+        v = rank < it.zero ? 0 : (rank - it.zero < fullCount ? it.score : Math.round(it.score / 2 * 10) / 10);
+      }
+      if (v > 0) s.小题["化学"][it.no] = v;
+    });
+  });
+
   // 重算班名次 / 概况 / 科目统计 / 待复核（用与页面同一个函数，保证口径一致）
   WuyueParse.recomputeAggregates(data);
 

@@ -215,12 +215,13 @@ function send(res, code, obj, origin) {
   res.end(body);
 }
 
-function readBody(req, cb) {
+function readBody(req, cb, limit) {
+  const max = limit || 64 * 1024;
   let size = 0;
   const chunks = [];
   req.on("data", (c) => {
     size += c.length;
-    if (size > 64 * 1024) { req.destroy(); return cb(new Error("请求体太大")); }
+    if (size > max) { req.destroy(); return cb(new Error("请求体太大")); }
     chunks.push(c);
   });
   req.on("end", () => {
@@ -228,6 +229,23 @@ function readBody(req, cb) {
     catch (e) { cb(e); }
   });
   req.on("error", cb);
+}
+
+/** 回一个二进制文件（导出 docx 用；JSON 走 send） */
+function sendFile(res, code, buf, mime, origin) {
+  const headers = {
+    "Content-Type": mime,
+    "Content-Length": buf.length,
+    "Cache-Control": "no-store",
+    "Content-Disposition": 'attachment; filename="paper.docx"',
+  };
+  if (origin && ALLOWED_ORIGIN.indexOf(origin) >= 0) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Expose-Headers"] = "content-length";
+    headers["Vary"] = "Origin";
+  }
+  res.writeHead(code, headers);
+  res.end(buf);
 }
 
 const server = http.createServer((req, res) => {
@@ -285,6 +303,26 @@ const server = http.createServer((req, res) => {
       startDownload(String(body.url), String(body.name || ""), () => {});
       return send(res, 202, { ok: true, accepted: true, file: state.file }, origin);
     });
+  }
+
+  // 导出 Word（.docx）：页面把"排好版的块"发过来，这里按 OOXML 拼成真 docx。
+  // 为什么不在页面里生成：浏览器里拼 zip 要额外塞一个库，而且几十张图会卡；
+  // 交给这个已经在跑的小进程最省事，页面只管下载。
+  if (req.method === "POST" && url.pathname === "/docx") {
+    return readBody(req, (err, body) => {
+      if (err) return send(res, 400, { ok: false, error: "请求体解析失败" }, origin);
+      if (!body || !body.spec) return send(res, 400, { ok: false, error: "缺少 spec" }, origin);
+      let buf;
+      try {
+        const gen = require(path.join(__dirname, "docx_gen.js"));
+        buf = gen.buildDocx(body.spec);
+      } catch (e) {
+        log("导出 docx 失败: " + (e && e.message));
+        return send(res, 500, { ok: false, error: "生成失败：" + (e && e.message) }, origin);
+      }
+      return sendFile(res, 200, buf,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", origin);
+    }, 64 * 1024 * 1024);
   }
 
   return send(res, 404, { ok: false, error: "没有这个接口" }, origin);

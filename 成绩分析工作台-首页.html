@@ -715,6 +715,8 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
 .asm-paper .qi { display: block; max-width: 100%; height: auto; margin: 4px 0; }
 .asm-paper .qi-in { display: inline-block; vertical-align: -0.18em; max-height: 1.9em; width: auto; margin: 0 1px; }
 .asm-paper .qi-miss { color: #999; font-size: 10px; }
+.asm-paper table.qi-tab { border-collapse: collapse; margin: 4px 0; font-size: 10px; }
+.asm-paper table.qi-tab td { border: 1px solid #999; padding: 1px 4px; text-align: center; vertical-align: middle; }
 .asm-paper .pp-empty { text-align: center; color: #999; font-size: 12px; padding: 40px 0; }
 .asm-foot { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--stroke); }
 
@@ -2417,6 +2419,7 @@ const ASM_POOL = [
     if (b.text) q.stem = b.text;
     q.opts = b.opts || [];
     q.imgs = b.imgs || {};
+    q.tables = b.tables || {};
     if (b.ans) q.ans = b.ans;
     q.detail = b.detail || '';
   });
@@ -2428,37 +2431,97 @@ const ASM_POOL = [
     重点：这里必须写死 width/height 属性。Word 打开这种 .doc 时不认
     max-height:1.9em 之类的 CSS，但会照 width/height 属性按 px 排版；
     只给 CSS 的话它会把图按原始宽度拉满、高度却按 max-height 压扁，比例就毁了。 */
+/** 表格：[表n] 换成一张真表格（化学卷的实验数据表、化学键表都靠它）。
+    卡片里只放一个"表"标记，不然一张表把卡片撑爆。 */
+function asmTabHtml(rows, q, mode) {
+  if (mode === 'card') return '<span class="qi-chip">表</span>';
+  if (!rows || !rows.length) return '';
+  let html = '<table class="qi-tab">';
+  rows.forEach(function (row) {
+    html += '<tr>';
+    (row || []).forEach(function (c) {
+      if (!c || c.v) return;                       // 纵向合并的续格先跳过
+      const cs = c.cs > 1 ? ' colspan="' + c.cs + '"' : '';
+      html += '<td' + cs + '>' + asmRich(c.t, q, mode) + '</td>';
+    });
+    html += '</tr>';
+  });
+  return html + '</table>';
+}
 function asmRich(t, q, mode) {
+  const tabs = (q && q.tables) || {};
+  // 先按 [表n] 切段：表格是块级元素，不能塞在文字行里
+  return String(t == null ? '' : t).split(/(\[表[a-z]?\d+\])/g).map(function (seg) {
+    const m = /^\[表([a-z]?\d+)\]$/.exec(seg);
+    if (m) return asmTabHtml(tabs[m[1]], q, mode);
+    return asmRichText(seg, q, mode);
+  }).join('');
+}
+function asmRichText(t, q, mode) {
   const imgs = (q && q.imgs) || {};
   const card = mode === 'card';
-  return esc(String(t == null ? '' : t)).replace(/\[图([a-z]?\d+)\]/g, function (m, n) {
+  return esc(String(t == null ? '' : t)).replace(/\[图\s*([a-z]?\d+)\s*\]/g, function (m, n) {
     const it = imgs[n];
     if (!it) return '<span class="qi-miss">〔图' + n + '〕</span>';
     const src = typeof it === 'string' ? it : it.u;
-    let w = 0, h = 0, inline = true;
-    if (typeof it === 'object' && it.w && it.h) {
-      w = it.w;
-      h = it.h;
-      // 句中的公式 vs 独立的一张图：
-      //   公式（长度中等、偏扁）要跟着文字走；装置图 / 表格 / 曲线（高，或近正方形且够大）
-      //   要单独占一行。仅凭宽高判断不完美，但比"只按宽度上限"准得多。
-      inline = !(h >= 180 || (w >= 200 && w / h < 1.5));
-    }
+    const cw = (typeof it === 'object' && it.cw) || 0;
+    const ch = (typeof it === 'object' && it.ch) || 0;
+    const w = (typeof it === 'object' && it.w) || 0;
+    const h = (typeof it === 'object' && it.h) || 0;
+    // 墨迹边界（占图宽高的比例）：公式图是 Word 截图，上下左右留白差别很大，
+    // 只按图高排会出现"同一行里一张大一张小"，按墨迹排才稳定。
+    const tp = (typeof it === 'object' && typeof it.t === 'number') ? it.t : 0;
+    const bt = (typeof it === 'object' && typeof it.b === 'number') ? it.b : 1;
+    const lt = (typeof it === 'object' && typeof it.l === 'number') ? it.l : 0;
+    const rt = (typeof it === 'object' && typeof it.r === 'number') ? it.r : 1;
+    // 题库里 solo=1 表示这张图在卷面上"独占一行"，那就是装置图/曲线图；
+    // 夹在文字中间的是公式，跟着字走。
+    const solo = (typeof it === 'object' && it.solo) ? true : false;
+    const inline = !solo;
     if (!inline && card) return '<span class="qi-chip">图' + n + '</span>';
     let dw = 0, dh = 0, cls = '', va = '';
-    if (inline) {
-      // 句中公式：高度压到 1 个字高（正文 11pt ≈ 14.67px，1em 就是它），
-      // 再按图里"墨迹底边"的位置对基线 —— 题库里每张图都带 b（墨迹底边占图高的比例），
-      // 不然裁得松的图会整块往上飘，和文字不在一条线上（用户报的 bug）。
-      dh = card ? 13 : 15;
-      dw = (w && h) ? Math.max(6, Math.round(w * dh / h)) : 0;
-      const bb = (typeof it === 'object' && typeof it.b === 'number') ? it.b : 1;
-      const offPx = bb * dh - 1.2;             // 墨迹底边落在基线下 1.2px（≈0.08em）
-      va = ' style="vertical-align:-' + (offPx / 14.67).toFixed(2) + 'em"';
+    const em = 14.67;                    // 正文 11pt ≈ 14.67px
+    const box = (w > 0 && h > 0);
+    const inkW = box ? Math.max(1, (rt - lt) * w) : w;
+    const inkH = box ? Math.max(1, (bt - tp) * h) : h;
+    if (inline && box) {
+      // 句中公式：按"墨迹高度"定字号 —— 单行公式排成 1.35 个字高，
+      // 上下摞起来的分数排成 2.2 个字高（再小就糊成一团黑了）。
+      const ratio = inkH / Math.max(1, inkW);
+      const tall = ratio >= 0.95;   // 只有"高≥宽"才是分数/根式；H₂ 这种扁的跟着字走
+      // 一两个字宽的小图（H₂、K₁）只是排版用的"图字"，按正文高度走，别放大
+      const target = (inkW < 3.5 * em ? 1.25 : (tall ? 2.2 : 1.35)) * em * (card ? 0.86 : 1);
+      dh = Math.max(9, Math.min(80, Math.round(target * h / inkH)));
+      dw = Math.max(4, Math.round(w * dh / h));
+      const maxW = card ? 220 : 520;
+      if (dw > maxW) {
+        dh = Math.max(6, Math.round(dh * maxW / dw));
+        dw = maxW;
+      }
+      // 基线：把墨迹底边压到文字基线附近（分数有降部，多压一点才居中）
+      const desc = (tall ? 0.26 : 0.06) * em;
+      const offPx = (1 - bt) * dh + desc;
+      va = ' style="vertical-align:-' + (offPx / em).toFixed(2) + 'em"';
       cls = card ? ' qi-in qi-c' : ' qi-in';
+    } else if (inline) {
+      dh = card ? 13 : 15;
+      dw = 0;
     } else {
-      dw = Math.min(w || 320, 320);            // 卷面上最多 320px 宽，比例不变
-      dh = (w && h) ? Math.max(1, Math.round(h * dw / w)) : 0;
+      // 独立图（装置图/曲线图/整行公式）：也不能按原始像素排 —— 208x144 的装置图
+      // 会变成 156pt 高，就是"巨大的图"。按墨迹定一个"两行字高"的尺寸最稳。
+      if (box) {
+        const target = 2.0 * em;         // ≈ 29px：比正文高一点，不至于喧宾夺主
+        dh = Math.max(12, Math.min(96, Math.round(target * h / inkH)));
+        dw = Math.max(4, Math.round(w * dh / h));
+        const maxW = 470;
+        if (dw > maxW) {
+          dh = Math.max(6, Math.round(dh * maxW / dw));
+          dw = maxW;
+        }
+      } else {
+        dw = 330;
+        dh = 0;
+      }
     }
     const size = dw && dh ? ' width="' + dw + '" height="' + dh + '"' : '';
     return '<img class="qi' + cls + '" src="' + src + '"' + size + va + ' alt="图' + n + '">';
@@ -2557,6 +2620,203 @@ function asmPaperSum(list, a) {
     ten: (a && a.minutes) || 20,
   };
 }
+/** 这张图该多大：卡片、纸面、docx 三处共用同一套算法，改一处就处处生效 */
+function asmSizeOf(it, card) {
+  const w = (typeof it === 'object' && it.w) || 0;
+  const h = (typeof it === 'object' && it.h) || 0;
+  const tp = (typeof it === 'object' && typeof it.t === 'number') ? it.t : 0;
+  const bt = (typeof it === 'object' && typeof it.b === 'number') ? it.b : 1;
+  const lt = (typeof it === 'object' && typeof it.l === 'number') ? it.l : 0;
+  const rt = (typeof it === 'object' && typeof it.r === 'number') ? it.r : 1;
+  const solo = typeof it === 'object' && it.solo ? true : false;
+  const em = 14.67;
+  const box = (w > 0 && h > 0);
+  if (!box) return { inline: !solo, w: 330, h: 0, down: 0 };
+  const inkW = Math.max(1, (rt - lt) * w);
+  const inkH = Math.max(1, (bt - tp) * h);
+  if (solo) {
+    // 独占一行的图：按"两行字高"排，不按原始像素（否则装置图会占半个版心）
+    const target = 2.0 * em * (card ? 0.6 : 1);
+    let dh = Math.max(12, Math.min(96, Math.round(target * h / inkH)));
+    let dw = Math.max(4, Math.round(w * dh / h));
+    const maxW = card ? 200 : 470;
+    if (dw > maxW) { dh = Math.max(6, Math.round(dh * maxW / dw)); dw = maxW; }
+    return { inline: false, w: dw, h: dh, down: 0 };
+  }
+  const tall = (inkH / Math.max(1, inkW)) >= 0.95;
+  const target = (inkW < 3.5 * em ? 1.25 : (tall ? 2.2 : 1.35)) * em * (card ? 0.86 : 1);
+  let dh = Math.max(9, Math.min(80, Math.round(target * h / inkH)));
+  let dw = Math.max(4, Math.round(w * dh / h));
+  const maxW = card ? 220 : 520;
+  if (dw > maxW) { dh = Math.max(6, Math.round(dh * maxW / dw)); dw = maxW; }
+  const desc = (tall ? 0.26 : 0.06) * em;
+  const down = (1 - bt) * dh + desc;
+  return { inline: true, w: dw, h: dh, down: Math.round(down * 10) / 10 };
+}
+/** 独立图（独占一行的那种）：按比例缩到版心里放得下 */
+function asmBlockSize(w, h) {
+  const maxW = 560, maxH = 200;
+  const sc = (w > 0 && h > 0) ? Math.min(1, maxW / w, maxH / h) : 1;
+  return { w: Math.max(1, Math.round((w || maxW) * sc)), h: Math.max(1, Math.round((h || maxH) * sc)) };
+}
+/** 一段文字 → docx 的 runs；图登记进 bag.images（key 唯一） */
+function asmDocRuns(t, q, bag, opt) {
+  const imgs = (q && q.imgs) || {};
+  const runs = [];
+  const re = /\[图\s*([a-z]?\d+)\s*\]/g;
+  let last = 0, m;
+  const s = String(t == null ? '' : t);
+  while ((m = re.exec(s))) {
+    if (m.index > last) runs.push({ text: s.slice(last, m.index) });
+    const n = m[1];
+    const it = imgs[n];
+    if (!it) {
+      runs.push({ text: '〔图' + n + '〕' });
+    } else {
+      const key = (q && q.no ? q.no : 'q') + '#' + n;
+      bag.images[key] = (typeof it === 'string') ? it : it.u;
+      const sz = asmSizeOf(it, false);
+      runs.push({ im: key, w: sz.w, h: sz.h, down: sz.down });
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) runs.push({ text: s.slice(last) });
+  return runs;
+}
+/** 文字 + [表n] → 若干块：文字段、表格、独立图各占一块 */
+function asmDocBlocks(text, q, bag, opt) {
+  const tabs = (q && q.tables) || {};
+  const blocks = [];
+  const re = /(\[表([a-z]?\d+)\])/g;
+  const s = String(text == null ? '' : text);
+  let last = 0, m;
+  while ((m = re.exec(s))) {
+    const seg = s.slice(last, m.index);
+    if (seg.trim()) blocks.push({ t: 'runs', runs: asmDocRuns(seg, q, bag, opt), firstIndent: (opt && opt.firstIndent) || 0 });
+    const rows = tabs[m[2]];
+    if (rows && rows.length) {
+      blocks.push({ t: 'table', rows: rows.map(function (row) {
+        return (row || []).map(function (c) {
+          if (!c || c.v) return { text: '' };
+          const cell = { cs: c.cs || 1 };
+          const ct = String(c.t || '');
+          if (/\[图[a-z]?\d+\]/.test(ct)) cell.runs = asmDocRuns(ct, q, bag, opt);
+          else cell.text = ct;
+          return cell;
+        });
+      }) });
+    }
+    last = m.index + m[0].length;
+  }
+  const rest = s.slice(last);
+  if (rest.trim() || !blocks.length) blocks.push({ t: 'runs', runs: asmDocRuns(rest, q, bag, opt), firstIndent: (opt && opt.firstIndent) || 0 });
+  return blocks;
+}
+/** 一份卷子 → docx 的 blocks（不含答案页） */
+function asmDocPaper(po, a, bag, opt) {
+  const o = opt || {};
+  const list = (po && po.list) || [];
+  const title = ((a && a.title) || '').trim() || '化学 · 专项限时练';
+  const sum = asmPaperSum(list, a);
+  const cls = (DATA.班级 && DATA.班级.名称) || '';
+  const blocks = [];
+  if (po && po.name) blocks.push({ t: 'name', text: po.name, newPage: !!o.newPage });
+  blocks.push({ t: 'h1', text: title, newPage: !po.name && !!o.newPage });
+  blocks.push({ t: 'sub', text: cls + ' · 化学 · 共 ' + sum.n + ' 题 · 满分 ' + sum.total + ' 分 · 建议 ' + sum.ten + ' 分钟' });
+  list.forEach(function (q, i) {
+    // 题干里可能有 [图N]（公式）和 [表n]（实验数据表）：按块拆开，题号补在第一段前面
+    const segs = asmDocBlocks(q.stem, q, bag, o);
+    segs.forEach(function (b, k) {
+      if (b.t === 'runs') {
+        if (k === 0) {
+          b.runs = [{ text: (i + 1) + '．' }].concat(b.runs);
+          b.runs.push({ text: '（' + q.score + ' 分）' });
+        }
+        b.line = 1.5;
+        b.after = 1;
+      }
+      blocks.push(b);
+    });
+    ((q.opts || [])).forEach(function (op) {
+      blocks.push({ t: 'runs', runs: asmDocRuns(op, q, bag, o), leftIndent: 24, line: 1.5, after: 1 });
+    });
+  });
+  return blocks;
+}
+/** 拼 spec：全班几十份也能一次生成（答案统一放最后一页） */
+function buildAsmDocx() {
+  const a = state.asm;
+  const papers = asmPapers();
+  if (!papers.length) return { error: '还没有可出的卷子。' };
+  const filled = papers.filter(p => p.list.length);
+  if (!filled.length) {
+    return { error: (a.scope === 'class') ? '题池里没有题目，先把左边的知识点放宽一点。'
+      : '一道题都没选，卷子是空的。' };
+  }
+  const bag = { images: {} };
+  const blocks = [];
+  filled.forEach(function (po, i) {
+    asmDocPaper(po, a, bag, { newPage: i > 0 }).forEach(function (b) {
+      if (i > 0 && b === undefined) return;
+      blocks.push(b);
+    });
+  });
+  let answers = null;
+  if (a.answers) {
+    const seen = {}, union = [];
+    filled.forEach(po => po.list.forEach(q => { if (!seen[q.no]) { seen[q.no] = 1; union.push(q); } }));
+    union.sort((x, y) => asmNumOf(x.no) - asmNumOf(y.no));
+    answers = [{ t: 'h1', text: '答案与解析（' + union.length + ' 题）' }];
+    union.forEach(function (q, i) {
+      const head = [{ text: (i + 1) + '．【' + q.no + '】答案：' }]
+        .concat(asmDocRuns(String(q.ans || '—'), q, bag, {}));
+      head[head.length - 1].bold = head[head.length - 1].text ? true : head[head.length - 1].bold;
+      answers.push({ t: 'runs', runs: head, line: 1.5, after: 1 });
+      if (q.detail) {
+        const ds = asmDocBlocks(q.detail, q, bag, {});
+        ds.forEach(function (b) {
+          if (b.t === 'runs') { b.leftIndent = 18; b.line = 1.4; }
+          answers.push(b);
+        });
+      }
+    });
+  }
+  const title = (a.title || '').trim() || '化学 · 专项限时练';
+  const multi = a.scope === 'class';
+  const fileName = asmSafeName(multi ? '化学-全班个性小卷-' + title
+    : '化学-小卷-' + (filled[0].name || '') + '-' + title) + '.docx';
+  return { error: '', spec: { blocks: blocks, answers: answers, images: bag.images }, fileName: fileName, count: filled.length };
+}
+/** 存 blob（docx 是二进制，不能用字符串下载） */
+function asmSaveBlob(fileName, blob) {
+  const url = URL.createObjectURL(blob);
+  const aEl = document.createElement('a');
+  aEl.href = url;
+  aEl.download = fileName;
+  document.body.appendChild(aEl);
+  aEl.click();
+  setTimeout(function () { URL.revokeObjectURL(url); aEl.remove(); }, 4000);
+}
+/** 让本机代理生成 docx；没有代理就返回错误，由调用方回退 */
+function asmPostDocx(spec) {
+  const U = (typeof window !== 'undefined') && window.__WB_UPDATER__;
+  if (!U || !U.agent) return Promise.reject(new Error('没有本地导出服务'));
+  return fetch(U.agent + '/docx', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-wb-token': U.token || '' },
+    body: JSON.stringify({ spec: spec })
+  }).then(function (res) {
+    if (!res.ok) {
+      return res.text().then(function (t) {
+        let msg = t.slice(0, 200);
+        try { msg = (JSON.parse(t) || {}).error || msg; } catch (e) {}
+        throw new Error(msg);
+      });
+    }
+    return res.blob();
+  });
+}
+
 /** 一份卷子的正文；opt.answers 可覆盖是否带答案（导出时答案统一放最后一页） */
 function asmPaperHtml(po, a, opt) {
   const list = (po && po.list) || [];
@@ -2621,6 +2881,8 @@ const ASM_DOC_CSS = ''
   + '.qi{display:block;max-width:100%;height:auto;margin:2mm 0;}\n'
   + '.qi-in{display:inline-block;margin:0 1px;}\n'
   + '.qi-miss{color:#666;}\n'
+  + '.qi-tab{border-collapse:collapse;margin:2mm 0;font-size:10pt;}\n'
+  + '.qi-tab td{border:1px solid #888;padding:1mm 1.6mm;text-align:center;vertical-align:middle;}\n'
   + '.pp-a .pa-h{font-weight:700;}\n'
   + '.pp-a .pa-d{color:#333;margin:1mm 0 0 3mm;}\n'
   /* 分页只能写在最里层的、有内容的段落上：Word / LibreOffice 会把容器上的
@@ -2910,11 +3172,22 @@ function asmInit() {
   const ansCb = document.getElementById('asmAnswers');
   ansCb.addEventListener('change', () => { state.asm.answers = ansCb.checked; renderAsm(); save(); });
   document.getElementById('asmExport').addEventListener('click', () => {
-    const r = buildAsmDoc();
+    const r = buildAsmDocx();
     if (r.error) return asmToast(r.error);
-    downloadFile(r.fileName, r.html, 'application/msword');
-    asmToast('已导出 ' + r.count + ' 份' + (r.count > 1 ? '（一人一页，答案合并在最后一页）' : '') +
-      '：' + r.fileName + '。在浏览器下载里找它，双击用 Word 打开。');
+    asmToast('正在生成 ' + r.count + ' 份…');
+    asmPostDocx(r.spec).then(function (blob) {
+      asmSaveBlob(r.fileName, blob);
+      asmToast('已导出 ' + r.count + ' 份：' + r.fileName + '（Word 打开，可直接改）');
+    }).catch(function (e) {
+      // 本地代理不在（比如直接用浏览器打开 html）：退回旧的 .doc，至少能看
+      const old = buildAsmDoc();
+      if (!old.error) {
+        downloadFile(old.fileName, old.html, 'application/msword');
+        asmToast('本机导出服务没响应（' + e.message + '），已先导出 .doc 应急版。');
+      } else {
+        asmToast('导出失败：' + e.message);
+      }
+    });
   });
   document.getElementById('asmPrint').addEventListener('click', () => {
     const r = buildAsmDoc();

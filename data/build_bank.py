@@ -94,27 +94,37 @@ def split_answer(raw):
 
 
 def ink_box(im):
-    """量出图里"墨迹"的上下边界，返回占图高的比例 (top, bottom)。
+    """量出图里"墨迹"的边界，返回占图宽高的比例 (top, bottom, left, right)。
 
     中文试卷用 Word 截图出来的公式图尺寸差别很大：同样是一个公式，有的裁得很紧，
-    有的上下留了一堆白。只按图高对齐基线的话，留白多的那张会整块往上飘，
-    看起来就和文字不在一条线上。所以把墨迹底边的位置存进题库，导出时再对基线。
+    有的上下留了一堆白。只按图高对齐基线的话，留白多的那张会整块往上飘；
+    只按图高定字号的话，留白多的会被排得特别小。左右边界用来量"墨迹实际多高多宽"，
+    据此决定这张图该按几个字高来排。
     """
     try:
         g = im.convert("L")
         w, h = g.size
         px = g.load()
-        rows = []
+        top = bottom = None
+        left, right = w, 0
         for y in range(h):
-            for x in range(0, w, 2):
+            hit = False
+            for x in range(0, w):
                 if px[x, y] < 235:
-                    rows.append(y)
-                    break
-        if not rows:
-            return 0.0, 1.0
-        return rows[0] / h, (rows[-1] + 1) / h
+                    hit = True
+                    if x < left:
+                        left = x
+                    if x >= right:
+                        right = x
+            if hit:
+                if top is None:
+                    top = y
+                bottom = y
+        if top is None:
+            return 0.0, 1.0, 0.0, 1.0
+        return top / h, (bottom + 1) / h, left / w, (right + 1) / w
     except Exception:
-        return 0.0, 1.0
+        return 0.0, 1.0, 0.0, 1.0
 
 
 def encode_image(path, width=640, colors=64):
@@ -136,11 +146,46 @@ def encode_image(path, width=640, colors=64):
     if im.width > width:
         h = max(1, round(im.height * width / im.width))
         im = im.resize((width, h), Image.LANCZOS)
-    top, bottom = ink_box(im)
+    top, bottom, left, right = ink_box(im)
     out = io.BytesIO()
     im.convert("RGBA").convert("P", palette=Image.ADAPTIVE, colors=colors).save(out, "PNG", optimize=True)
     return ("data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii"),
-            im.width, im.height, round(top, 3), round(bottom, 3))
+            im.width, im.height, round(top, 3), round(bottom, 3),
+            round(left, 3), round(right, 3))
+
+
+def solo_flags(texts, tab_cells=None):
+    """算出哪些 [图n] / [图an] 是"独占一行"的。
+
+    返回 {'图7': True, '图a3': False, ...}。规则：这一行去掉所有图/表标记和标点后
+    为空，就当独立图（装置图、曲线图）；只要有任何一处它夹在文字中间，就当句中公式
+    （宁可小一点，也不要在卷面中间炸出一张大图）。表格格子里的图一律按句中公式。
+    """
+    tab = set(tab_cells or [])
+    solo = {}
+    inline = {}
+    for raw in texts:
+        for ln in str(raw).split("\n"):
+            marks = re.findall(r"\[(图a?\d+)\]", ln)
+            if not marks:
+                continue
+            if ln in tab:
+                for m in marks:
+                    inline[m] = True
+                continue
+            rest = re.sub(r"\[(?:图a?\d+|表[a-z]?\d+)\]", "", ln)
+            # 图注里的 ①②③④、Ⅰ Ⅱ、A B C 是"这是第几张图"的编号，不算正文；
+            # 去掉它们和标点后仍为空，就说明这一行只有图 → 独立图。
+            rest = re.sub(r"[\u2460-\u2473\u2160-\u216b]", "", rest)
+            rest = re.sub(r"[\s，。；：、！？,.!?:;·（）()\[\]“”\"'—\-]+", "", rest)
+            rest = re.sub(r"^[A-Da-d]+$", "", rest)
+            rest = re.sub(r"^\d+$", "", rest)
+            for m in marks:
+                if rest == "":
+                    solo[m] = True
+                else:
+                    inline[m] = True
+    return dict((m, True) for m in solo if m not in inline)
 
 
 def main():
@@ -160,6 +205,10 @@ def main():
     items = data["题目"] if isinstance(data, dict) else data
     want = set(int(x) for x in a.nos.split(",") if x.strip())
 
+    # 每张图在 Word 里的显示尺寸（parse_paper_docx.py 写的 sidecar）
+    sfile = os.path.join(a.bank, "media_sizes.json")
+    show = json.load(open(sfile, encoding="utf-8")) if os.path.exists(sfile) else {}
+
     media = os.path.join(a.bank, "media")
     out, n_img, img_kb = [], 0, 0
     for it in items:
@@ -173,31 +222,57 @@ def main():
         else:
             stem, opts = text.strip(), []
         ans, detail = split_answer(it.get("答案与解析", ""))
+        # 表格：题面里的 [表n] 与解析里的 [表an] 各一套
+        tabs = {}
+        for k, v in (it.get("tables") or {}).items():
+            tabs[str(k)] = v
+        for k, v in (it.get("答案表格") or {}).items():
+            tabs[str(k)] = v
+
+        # 表格格子里的图也算进这道题的图（格子里可能就是一张装置图 / 化学键图）
+        cell_text = []
+        for rows in tabs.values():
+            for row in rows:
+                for c in row:
+                    cell_text.append(c.get("t", ""))
+        scan = "\n".join([text, detail] + cell_text)
+        # 哪些图是"独占一行"的（那一行除了图什么都没有）——这类是装置图/曲线图，
+        # 该单独占一行；夹在文字中间的是公式，要跟着字走。表格格子里的图一律
+        # 当句中公式处理（格子里就是符号/化学键图）。
+        solo = solo_flags([text, detail] + cell_text, tab_cells=cell_text)
 
         imgs = {}
         if not a.no_images:
             # 题干/选项里的图：来自试卷那份 docx（paper-…）
-            for n in sorted(set(int(x) for x in re.findall(r"\[图(\d+)\]", text))):
-                p = os.path.join(media, "paper-%03d-image%d.png" % (n, n))
+            for n in sorted(set(int(x) for x in re.findall(r"\[图(\d+)\]", scan))):
+                base = "paper-%03d-image%d.png" % (n, n)
+                p = os.path.join(media, base)
                 if not os.path.exists(p):
                     continue
                 enc = encode_image(p, a.width, a.colors)
                 if enc:
-                    uri, iw, ih, itop, ibot = enc
-                    # w/h 让页面决定这张图排成"句中的公式"还是"独立的一张图"；
-                    # t/b 是墨迹上下边界，导出时用它把公式对到文字基线上
-                    imgs[str(n)] = {"u": uri, "w": iw, "h": ih, "t": itop, "b": ibot}
+                    uri, iw, ih, itop, ibot, il, ir = enc
+                    item = {"u": uri, "w": iw, "h": ih, "t": itop, "b": ibot,
+                            "l": il, "r": ir, "solo": 1 if solo.get("图%d" % n) else 0}
+                    if base in show:
+                        item["cw"], item["ch"] = show[base]
+                    imgs[str(n)] = item
                     n_img += 1
                     img_kb += len(uri) / 1024
             # 答案与解析里的图：来自解析件那份 docx（ans-…），键名加 a 前缀
-            for n in sorted(set(int(x) for x in re.findall(r"\[图a(\d+)\]", detail))):
-                p = os.path.join(media, "ans-%03d-image%d.png" % (n, n))
+            for n in sorted(set(int(x) for x in re.findall(r"\[图a(\d+)\]", scan))):
+                base = "ans-%03d-image%d.png" % (n, n)
+                p = os.path.join(media, base)
                 if not os.path.exists(p):
                     continue
                 enc = encode_image(p, a.width, a.colors)
                 if enc:
-                    uri, iw, ih, itop, ibot = enc
-                    imgs["a%d" % n] = {"u": uri, "w": iw, "h": ih, "t": itop, "b": ibot}
+                    uri, iw, ih, itop, ibot, il, ir = enc
+                    item = {"u": uri, "w": iw, "h": ih, "t": itop, "b": ibot,
+                            "l": il, "r": ir, "solo": 1 if solo.get("图a%d" % n) else 0}
+                    if base in show:
+                        item["cw"], item["ch"] = show[base]
+                    imgs["a%d" % n] = item
                     n_img += 1
                     img_kb += len(uri) / 1024
         out.append({
@@ -206,6 +281,7 @@ def main():
             "text": stem,
             "opts": opts,
             "imgs": imgs,
+            "tables": tabs,
             "ans": ans,
             "detail": detail,
         })

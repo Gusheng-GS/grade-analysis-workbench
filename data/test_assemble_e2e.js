@@ -40,8 +40,9 @@ const LS_KEY = 'dsh-grade-workbench-v6';
 const PAGE = process.env.ASM_PAGE || path.join(ROOT, 'build', '_asm_page.html');
 
 if (!fs.existsSync(PAGE)) {
-  console.log('[SKIP] 没有带数据版页面（' + PAGE + '）。先生成：');
-  console.log('       python data\\gen_home_html.py --with-data --out build\\_asm_page.html');
+  console.log('[SKIP] 没有带数据版页面（' + PAGE + '）。先生成，再用 ASM_PAGE 指过去：');
+  console.log('       python data\\gen_home_html.py --with-data --out %TEMP%\\asm_page.html');
+  console.log('       set ASM_PAGE=%TEMP%\\asm_page.html && node data\\test_assemble_e2e.js');
   process.exit(0);
 }
 

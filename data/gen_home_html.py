@@ -1863,17 +1863,23 @@ function asmRich(t, q, mode) {
       inline = !(h >= 180 || (w >= 200 && w / h < 1.5));
     }
     if (!inline && card) return '<span class="qi-chip">图' + n + '</span>';
-    let dw = 0, dh = 0, cls = '';
+    let dw = 0, dh = 0, cls = '', va = '';
     if (inline) {
-      dh = card ? 14 : 24;                     // 约 1.5~2 个字高
+      // 句中公式：高度压到 1 个字高（正文 11pt ≈ 14.67px，1em 就是它），
+      // 再按图里"墨迹底边"的位置对基线 —— 题库里每张图都带 b（墨迹底边占图高的比例），
+      // 不然裁得松的图会整块往上飘，和文字不在一条线上（用户报的 bug）。
+      dh = card ? 13 : 15;
       dw = (w && h) ? Math.max(6, Math.round(w * dh / h)) : 0;
+      const bb = (typeof it === 'object' && typeof it.b === 'number') ? it.b : 1;
+      const offPx = bb * dh - 1.2;             // 墨迹底边落在基线下 1.2px（≈0.08em）
+      va = ' style="vertical-align:-' + (offPx / 14.67).toFixed(2) + 'em"';
       cls = card ? ' qi-in qi-c' : ' qi-in';
     } else {
       dw = Math.min(w || 320, 320);            // 卷面上最多 320px 宽，比例不变
       dh = (w && h) ? Math.max(1, Math.round(h * dw / w)) : 0;
     }
     const size = dw && dh ? ' width="' + dw + '" height="' + dh + '"' : '';
-    return '<img class="qi' + cls + '" src="' + src + '"' + size + ' alt="图' + n + '">';
+    return '<img class="qi' + cls + '" src="' + src + '"' + size + va + ' alt="图' + n + '">';
   });
 }
 /** 选项逐条排开（选择题才有；非选择题是空数组） */
@@ -1978,9 +1984,11 @@ function asmPaperHtml(po, a, opt) {
   const s = asmPaperSum(list, a);
   const cls = (DATA.班级 && DATA.班级.名称) || '';
   const who = (po && po.name) || '';
+  // 换人换页：分页写在人名这段（最里层、有内容）上；容器上的 page-break 不生效
+  const brk = (opt && opt.breakBefore) ? ' style="page-break-before:always;"' : '';
   if (!list.length) {
     const noStu = !asmStuList().length;
-    return (who ? '<div class="pp-name">' + esc(who) + '</div>' : '') +
+    return (who ? '<div class="pp-name"' + brk + '>' + esc(who) + '</div>' : '') +
       '<div class="pp-t">' + esc(title) + '</div>' +
       '<div class="asm-empty">' + (noStu
         ? '还没有学生成绩。<br>先在右上角「导入成绩」，这里才有学生可以出卷。'
@@ -1988,8 +1996,8 @@ function asmPaperHtml(po, a, opt) {
           ? '还没选题。<br>在中间勾几道，或点「按掌握率挑满」。'
           : '这个人的题池是空的。<br>把左边的知识点或题型放宽一点。')) + '</div>';
   }
-  let h = (who ? '<div class="pp-name">' + esc(who) + '</div>' : '') +
-    '<div class="pp-t">' + esc(title) + '</div>' +
+  let h = (who ? '<div class="pp-name"' + brk + '>' + esc(who) + '</div>' : '') +
+    '<div class="pp-t"' + (who ? '' : brk) + '>' + esc(title) + '</div>' +
     '<div class="pp-line">' + esc(cls) + ' · 化学 · 共 ' + s.n + ' 题 · 满分 ' + s.total +
     ' 分 · 建议 ' + s.ten + ' 分钟</div>';
   if (!who) h += '<div class="pp-line">姓名：____________　　得分：________</div>';
@@ -2017,8 +2025,9 @@ function asmSafeName(s) {
 const ASM_DOC_CSS = ''
   + '@page{size:A4;margin:18mm 16mm;}\n'
   + 'body{font-family:"Microsoft YaHei","PingFang SC",SimSun,serif;font-size:11pt;line-height:1.7;color:#111;margin:0;}\n'
-  + '.pp{page-break-after:always;}\n'
-  + '.pp:last-child{page-break-after:auto;}\n'
+  /* 每人一页：靠人名那段的 style="page-break-before:always"，不要写在这里 ——
+     实测把 page-break 放在容器 .pp 上会被 Word / LibreOffice 直接丢掉。 */
+  + '.pp{margin:0;}\n'
   + '.pp-name{font-size:15pt;font-weight:700;margin:0 0 2mm;}\n'
   + '.pp-t{font-size:13pt;font-weight:700;margin:0 0 1.5mm;}\n'
   + '.pp-line{font-size:10pt;color:#333;margin:0 0 4mm;}\n'
@@ -2028,11 +2037,14 @@ const ASM_DOC_CSS = ''
   + '.pp-opts{margin:1mm 0 0 4mm;}\n'
   + '.pp-o{margin:0 0 1mm;}\n'
   + '.qi{display:block;max-width:100%;height:auto;margin:2mm 0;}\n'
-  + '.qi-in{display:inline-block;vertical-align:-0.18em;max-height:1.9em;width:auto;margin:0 1px;}\n'
+  + '.qi-in{display:inline-block;margin:0 1px;}\n'
   + '.qi-miss{color:#666;}\n'
   + '.pp-a .pa-h{font-weight:700;}\n'
   + '.pp-a .pa-d{color:#333;margin:1mm 0 0 3mm;}\n'
-  + '.pp-ans{page-break-before:always;border-top:1px dashed #999;padding-top:3mm;}\n'
+  /* 分页只能写在最里层的、有内容的段落上：Word / LibreOffice 会把容器上的
+     page-break-before 继承给里面每一个块级元素（踩过：1 题 4 页，一行一页）；
+     空 div 上的分页又会被丢掉。所以直接写在答案标题这一段的 style 上。 */
+  + '.pp-ans{border-top:1px dashed #999;padding-top:3mm;}\n'
   + '.pp-ans .h{font-weight:700;margin:0 0 2mm;}\n'
   + '.pp-a{margin:0 0 2mm;font-size:10.5pt;}\n';
 /** 拼一份可导出的 html：每人一页，答案合并在最后一页 */
@@ -2048,13 +2060,13 @@ function buildAsmDoc() {
   }
   const title = (a.title || '').trim() || '化学 · 专项限时练';
   const multi = a.scope === 'class';
-  let body = filled.map(po => '<div class="pp">' + asmPaperHtml(po, a, { answers: false }) + '</div>').join('\n');
+  let body = filled.map((po, i) => '<div class="pp">' + asmPaperHtml(po, a, { answers: false, breakBefore: i > 0 }) + '</div>').join('\n');
   if (a.answers) {
     const seen = {};
     const union = [];
     filled.forEach(po => po.list.forEach(q => { if (!seen[q.no]) { seen[q.no] = 1; union.push(q); } }));
     union.sort((x, y) => asmNumOf(x.no) - asmNumOf(y.no));
-    body += '\n<div class="pp"><div class="pp-ans"><div class="h">答案与解析（' + union.length + ' 题）</div>' +
+    body += '\n<div class="pp"><div class="pp-ans"><div class="h" style="page-break-before:always;">答案与解析（' + union.length + ' 题）</div>' +
       union.map((q, i) => '<div class="pp-a"><div class="pa-h">' + (i + 1) + '. 【' + esc(q.no) + '】答案：' +
         asmRich(q.ans || '—', q) + '</div>' + (q.detail ? '<div class="pa-d">' + asmRich(q.detail, q) + '</div>' : '') +
         '</div>').join('') + '</div></div>';

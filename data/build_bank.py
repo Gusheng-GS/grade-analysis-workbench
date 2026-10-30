@@ -93,11 +93,35 @@ def split_answer(raw):
     return ans, detail
 
 
+def ink_box(im):
+    """量出图里"墨迹"的上下边界，返回占图高的比例 (top, bottom)。
+
+    中文试卷用 Word 截图出来的公式图尺寸差别很大：同样是一个公式，有的裁得很紧，
+    有的上下留了一堆白。只按图高对齐基线的话，留白多的那张会整块往上飘，
+    看起来就和文字不在一条线上。所以把墨迹底边的位置存进题库，导出时再对基线。
+    """
+    try:
+        g = im.convert("L")
+        w, h = g.size
+        px = g.load()
+        rows = []
+        for y in range(h):
+            for x in range(0, w, 2):
+                if px[x, y] < 235:
+                    rows.append(y)
+                    break
+        if not rows:
+            return 0.0, 1.0
+        return rows[0] / h, (rows[-1] + 1) / h
+    except Exception:
+        return 0.0, 1.0
+
+
 def encode_image(path, width=640, colors=64):
     """压成一张小 PNG：宽度上限 640，调色板 64 色。
 
-    返回 (data URI, 宽, 高) —— 带宽高是为了排版时判断"这张图是句中的公式还是
-    独立的一张图"：窄而矮的公式要跟着文字走（inline），宽的要单独占一行。
+    返回 (data URI, 宽, 高, 墨迹上边, 墨迹下边) —— 带宽高是为了排版时判断"这张图是
+    句中的公式还是独立的一张图"；带墨迹边界是为了让公式和文字对齐基线。
     """
     try:
         from PIL import Image
@@ -112,9 +136,11 @@ def encode_image(path, width=640, colors=64):
     if im.width > width:
         h = max(1, round(im.height * width / im.width))
         im = im.resize((width, h), Image.LANCZOS)
+    top, bottom = ink_box(im)
     out = io.BytesIO()
     im.convert("RGBA").convert("P", palette=Image.ADAPTIVE, colors=colors).save(out, "PNG", optimize=True)
-    return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii"), im.width, im.height
+    return ("data:image/png;base64," + base64.b64encode(out.getvalue()).decode("ascii"),
+            im.width, im.height, round(top, 3), round(bottom, 3))
 
 
 def main():
@@ -157,9 +183,10 @@ def main():
                     continue
                 enc = encode_image(p, a.width, a.colors)
                 if enc:
-                    uri, iw, ih = enc
-                    # w/h 让页面决定这张图排成"句中的公式"还是"独立的一张图"
-                    imgs[str(n)] = {"u": uri, "w": iw, "h": ih}
+                    uri, iw, ih, itop, ibot = enc
+                    # w/h 让页面决定这张图排成"句中的公式"还是"独立的一张图"；
+                    # t/b 是墨迹上下边界，导出时用它把公式对到文字基线上
+                    imgs[str(n)] = {"u": uri, "w": iw, "h": ih, "t": itop, "b": ibot}
                     n_img += 1
                     img_kb += len(uri) / 1024
             # 答案与解析里的图：来自解析件那份 docx（ans-…），键名加 a 前缀
@@ -169,8 +196,8 @@ def main():
                     continue
                 enc = encode_image(p, a.width, a.colors)
                 if enc:
-                    uri, iw, ih = enc
-                    imgs["a%d" % n] = {"u": uri, "w": iw, "h": ih}
+                    uri, iw, ih, itop, ibot = enc
+                    imgs["a%d" % n] = {"u": uri, "w": iw, "h": ih, "t": itop, "b": ibot}
                     n_img += 1
                     img_kb += len(uri) / 1024
         out.append({

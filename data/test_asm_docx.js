@@ -52,7 +52,10 @@ setTimeout(() => {
     ok(spec.answers && spec.answers.length > 1, '答案页有内容');
     const inline = spec.blocks.reduce((n, b) => n + ((b.runs || []).filter(x => x.im && x.w < 200).length), 0);
     ok(inline > 0, '有行内公式（小宽度的图）：' + inline + ' 处');
-    const buf = gen.buildDocx(spec);
+    ok(!!w.DocxGen && typeof w.DocxGen.buildDocx === 'function', '页面里带上了 docx 生成器（DocxGen）');
+    const buf = w.DocxGen.buildDocx(spec);
+    const bufNode = gen.buildDocx(spec);
+    ok(Buffer.compare(Buffer.from(buf), Buffer.from(bufNode)) === 0, '页面生成的字节与 Node 版一致');
     fs.writeFileSync(out, buf);
     const size = buf.length;
     ok(size > 50000, '生成的文件不为空：' + (size / 1024).toFixed(0) + ' KB');

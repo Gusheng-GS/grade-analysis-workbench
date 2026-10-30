@@ -7,11 +7,59 @@
  * 反而最可控 —— 图片多大、表格几列、在哪里分页，全都写死在文件里，
  * 不再由 Word 打开时"猜"（这就是之前 .doc 出现巨图的根子）。
  *
- * 对外只有 buildDocx(spec) -> Buffer。spec 见文件末尾的说明。
+ * 对外只有 buildDocx(spec) -> Uint8Array（Node 里同时能用 Buffer 传给 fs）。
+ * spec 见文件末尾的说明。
+ *
+ * 2026-10-31 改成"两端都能跑"：Node（测试、更新代理）和浏览器页面（导出按钮）
+ * 共用这一份代码。页面在 DSH 桌面端里打开时没有本地导出服务，所以必须能在
+ * 浏览器里直接把 docx 拼出来，不能再依赖那个小服务。
  */
 "use strict";
 
-const zlib = require("zlib");
+// ───────────────────── 兼容层：Node 用 Buffer，浏览器用 Uint8Array ─────────────────────
+const HAS_BUF = (typeof Buffer !== "undefined" && typeof Buffer.alloc === "function");
+
+function alloc(n) {
+  return HAS_BUF ? Buffer.alloc(n) : new Uint8Array(n);
+}
+
+/** 字符串 -> 字节（UTF-8） */
+function fromStr(s) {
+  if (HAS_BUF) return Buffer.from(s, "utf8");
+  return new TextEncoder().encode(s);
+}
+
+/** base64 -> 字节（题库里的图片都是带 base64 前缀的 data URI） */
+function fromB64(b64) {
+  if (HAS_BUF) return Buffer.from(b64, "base64");
+  const bin = atob(b64);
+  const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+
+function concat(list) {
+  if (HAS_BUF) return Buffer.concat(list);
+  let total = 0;
+  for (let i = 0; i < list.length; i++) total += list[i].length;
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (let i = 0; i < list.length; i++) { out.set(list[i], at); at += list[i].length; }
+  return out;
+}
+
+// 小端写入：Uint8Array 没有 writeUInt*LE，所以统一自己写
+function w16(a, v, o) {
+  a[o] = v & 0xff;
+  a[o + 1] = (v >>> 8) & 0xff;
+}
+
+function w32(a, v, o) {
+  a[o] = v & 0xff;
+  a[o + 1] = (v >>> 8) & 0xff;
+  a[o + 2] = (v >>> 16) & 0xff;
+  a[o + 3] = (v >>> 24) & 0xff;
+}
 
 // ───────────────────────── ZIP（store，不压缩） ─────────────────────────
 const CRC_TABLE = (function () {
@@ -38,51 +86,51 @@ function zipStore(files) {
   let offset = 0;
 
   files.forEach(function (f) {
-    const name = Buffer.from(f.name, "utf8");
+    const name = fromStr(f.name);
     const data = f.data;
     const crc = crc32(data);
 
-    const local = Buffer.alloc(30);
-    local.writeUInt32LE(0x04034b50, 0);
-    local.writeUInt16LE(20, 4);
-    local.writeUInt16LE(0x0800, 6);              // 文件名 UTF-8
-    local.writeUInt16LE(0, 8);                   // store
-    local.writeUInt16LE(DOS_TIME, 10);
-    local.writeUInt16LE(DOS_DATE, 12);
-    local.writeUInt32LE(crc, 14);
-    local.writeUInt32LE(data.length, 18);
-    local.writeUInt32LE(data.length, 22);
-    local.writeUInt16LE(name.length, 26);
-    local.writeUInt16LE(0, 28);
+    const local = alloc(30);
+    w32(local, 0x04034b50, 0);
+    w16(local, 20, 4);
+    w16(local, 0x0800, 6);              // 文件名 UTF-8
+    w16(local, 0, 8);                   // store
+    w16(local, DOS_TIME, 10);
+    w16(local, DOS_DATE, 12);
+    w32(local, crc, 14);
+    w32(local, data.length, 18);
+    w32(local, data.length, 22);
+    w16(local, name.length, 26);
+    w16(local, 0, 28);
     parts.push(local, name, data);
 
-    const cen = Buffer.alloc(46);
-    cen.writeUInt32LE(0x02014b50, 0);
-    cen.writeUInt16LE(20, 4);
-    cen.writeUInt16LE(20, 6);
-    cen.writeUInt16LE(0x0800, 8);
-    cen.writeUInt16LE(0, 10);
-    cen.writeUInt16LE(DOS_TIME, 12);
-    cen.writeUInt16LE(DOS_DATE, 14);
-    cen.writeUInt32LE(crc, 16);
-    cen.writeUInt32LE(data.length, 20);
-    cen.writeUInt32LE(data.length, 24);
-    cen.writeUInt16LE(name.length, 28);
-    cen.writeUInt32LE(offset, 42);
+    const cen = alloc(46);
+    w32(cen, 0x02014b50, 0);
+    w16(cen, 20, 4);
+    w16(cen, 20, 6);
+    w16(cen, 0x0800, 8);
+    w16(cen, 0, 10);
+    w16(cen, DOS_TIME, 12);
+    w16(cen, DOS_DATE, 14);
+    w32(cen, crc, 16);
+    w32(cen, data.length, 20);
+    w32(cen, data.length, 24);
+    w16(cen, name.length, 28);
+    w32(cen, offset, 42);
     central.push(cen, name);
 
     offset += local.length + name.length + data.length;
   });
 
-  const cenBuf = Buffer.concat(central);
-  const eocd = Buffer.alloc(22);
-  eocd.writeUInt32LE(0x06054b50, 0);
-  eocd.writeUInt16LE(files.length, 8);
-  eocd.writeUInt16LE(files.length, 10);
-  eocd.writeUInt32LE(cenBuf.length, 12);
-  eocd.writeUInt32LE(offset, 16);
+  const cenBuf = concat(central);
+  const eocd = alloc(22);
+  w32(eocd, 0x06054b50, 0);
+  w16(eocd, files.length, 8);
+  w16(eocd, files.length, 10);
+  w32(eocd, cenBuf.length, 12);
+  w32(eocd, offset, 16);
 
-  return Buffer.concat(parts.concat([cenBuf, eocd]));
+  return concat(parts.concat([cenBuf, eocd]));
 }
 
 // ───────────────────────── 单位与 XML 小工具 ─────────────────────────
@@ -211,7 +259,7 @@ function buildDocx(spec) {
     if (!m) return null;
     imgN += 1;
     const ext = m[1] === "jpeg" ? "jpg" : m[1];
-    const rec = { name: "media/image" + imgN + "." + ext, rid: "rId" + (100 + imgN), buf: Buffer.from(m[2], "base64") };
+    const rec = { name: "media/image" + imgN + "." + ext, rid: "rId" + (100 + imgN), buf: fromB64(m[2]) };
     media[key] = rec;
     rels.push([rec.rid, rec.name]);
     return rec;
@@ -294,11 +342,11 @@ function buildDocx(spec) {
     "</Relationships>";
 
   const files = [
-    { name: "[Content_Types].xml", data: Buffer.from(contentTypes, "utf8") },
-    { name: "_rels/.rels", data: Buffer.from(rootRels, "utf8") },
-    { name: "word/document.xml", data: Buffer.from(documentXml, "utf8") },
-    { name: "word/styles.xml", data: Buffer.from(stylesXml, "utf8") },
-    { name: "word/_rels/document.xml.rels", data: Buffer.from(documentRels, "utf8") },
+    { name: "[Content_Types].xml", data: fromStr(contentTypes) },
+    { name: "_rels/.rels", data: fromStr(rootRels) },
+    { name: "word/document.xml", data: fromStr(documentXml) },
+    { name: "word/styles.xml", data: fromStr(stylesXml) },
+    { name: "word/_rels/document.xml.rels", data: fromStr(documentRels) },
   ];
   Object.keys(media).forEach(function (k) {
     files.push({ name: "word/" + media[k].name, data: media[k].buf });
@@ -313,4 +361,7 @@ const NS_STR = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006
   'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ' +
   'xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"';
 
-module.exports = { buildDocx: buildDocx, zipStore: zipStore, crc32: crc32, BODY_W_PX: BODY_W_PX };
+var DOCX_API = { buildDocx: buildDocx, zipStore: zipStore, crc32: crc32, BODY_W_PX: BODY_W_PX };
+// 两端导出：Node 走 module.exports，浏览器挂到 window.DocxGen
+if (typeof module !== "undefined" && module.exports) module.exports = DOCX_API;
+if (typeof window !== "undefined") { window.DocxGen = DOCX_API; }

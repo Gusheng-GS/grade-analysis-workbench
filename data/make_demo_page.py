@@ -218,7 +218,8 @@ if _dropped:
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(page)
     print("演示页已去掉题库正文（%d 处），避免公开材料里出现真实试题" % _dropped)
-if "data:image/png;base64," in page:
+# 真的内联大图 = 前缀后面跟着一长串 base64（短注释/正则里的字样不算）
+if re.search(r"data:image/[a-z]+;base64,[A-Za-z0-9+/=]{200,}", page):
     raise SystemExit("演示页里还有内联图片，题库没掏干净，先别发布")
 if "</head>" not in page:
     raise SystemExit("页面里找不到 </head>，注入失败")

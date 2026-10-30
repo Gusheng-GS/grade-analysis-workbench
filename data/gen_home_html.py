@@ -1558,6 +1558,11 @@ html[data-theme="dark"] .asm-paper { background: #f2f2f2; box-shadow: 0 1px 4px 
 /* ── 五岳导出解析器（和 Node 测试跑的是同一份代码）── */
 __WUYUE_PARSE__
 
+/* ── docx 生成器（和 Node 侧、更新代理用的是同一份 data/docx_gen.js）──
+   页面里直接拼 docx，不再依赖本机小服务：老师在 DSH 桌面端里打开、
+   或者干脆双击 html 都能导出，只要不在手机浏览器里就行。 */
+__DOCX_GEN__
+
 /* ── 题库正文：题干全文 / 选项 / 图（base64）/ 答案与解析 ──
    由 data/build_bank.py 生成（内容来自老师试卷，不进 git）；
    没有这个文件时这里是空数组，组卷台就退回只有"题干首句"的样子。 */
@@ -2215,25 +2220,13 @@ function asmSaveBlob(fileName, blob) {
   aEl.click();
   setTimeout(function () { URL.revokeObjectURL(url); aEl.remove(); }, 4000);
 }
-/** 让本机代理生成 docx；没有代理就返回错误，由调用方回退 */
-function asmPostDocx(spec) {
-  const U = (typeof window !== 'undefined') && window.__WB_UPDATER__;
-  if (!U || !U.agent) return Promise.reject(new Error('没有本地导出服务'));
-  return fetch(U.agent + '/docx', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-wb-token': U.token || '' },
-    body: JSON.stringify({ spec: spec })
-  }).then(function (res) {
-    if (res.status === 404) throw new Error('导出服务是旧版（没有 docx 接口），请关掉程序重新双击启动一次');
-    if (!res.ok) {
-      return res.text().then(function (t) {
-        let msg = t.slice(0, 200);
-        try { msg = (JSON.parse(t) || {}).error || msg; } catch (e) {}
-        throw new Error(msg);
-      });
-    }
-    return res.blob();
-  });
+/** 在页面里直接生成 docx（不依赖任何本地服务） */
+function asmBuildDocxBlob(spec) {
+  if (typeof DocxGen === 'undefined' || !DocxGen.buildDocx) {
+    throw new Error('页面里的 docx 生成器没加载（这个 html 是不是旧的？重新生成一次）');
+  }
+  const u8 = DocxGen.buildDocx(spec);
+  return new Blob([u8], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
 }
 
 /** 一份卷子的正文；opt.answers 可覆盖是否带答案（导出时答案统一放最后一页） */
@@ -2594,19 +2587,13 @@ function asmInit() {
     const r = buildAsmDocx();
     if (r.error) return asmToast(r.error);
     asmToast('正在生成 ' + r.count + ' 份…');
-    asmPostDocx(r.spec).then(function (blob) {
+    try {
+      const blob = asmBuildDocxBlob(r.spec);
       asmSaveBlob(r.fileName, blob);
       asmToast('已导出 ' + r.count + ' 份：' + r.fileName + '（Word 打开，可直接改）');
-    }).catch(function (e) {
-      // 本地代理不在（比如直接用浏览器打开 html）：退回旧的 .doc，至少能看
-      const old = buildAsmDoc();
-      if (!old.error) {
-        downloadFile(old.fileName, old.html, 'application/msword');
-        asmToast('本机导出服务没响应（' + e.message + '），已先导出 .doc 应急版。');
-      } else {
-        asmToast('导出失败：' + e.message);
-      }
-    });
+    } catch (e) {
+      asmToast('导出失败：' + e.message);
+    }
   });
   document.getElementById('asmPrint').addEventListener('click', () => {
     const r = buildAsmDoc();
@@ -6286,6 +6273,11 @@ renderAll();
 html = HTML.replace("__DATA__", DATA_JSON)
 html = html.replace("__WUYUE_PARSE__", PARSE_JS)
 html = html.replace("__APP_VERSION__", json.dumps(APP_VERSION))
+
+# docx 生成器：和 Node 测试、更新代理用的是同一个文件，直接嵌进页面
+DOCX_GEN_FILE = os.path.join(BASE, "docx_gen.js")
+with open(DOCX_GEN_FILE, encoding="utf-8") as f:
+    html = html.replace("__DOCX_GEN__", f.read())
 
 # 题库正文：data/asm_bank.js 存在就嵌进来（里面有真实试卷内容，不进 git）
 BANK_FILE = os.path.join(BASE, "asm_bank.js")

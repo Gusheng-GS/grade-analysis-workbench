@@ -10,14 +10,26 @@
   表现为"换了新包但界面还是老的"。
 
 注入内容与 Launcher.cs 里的 IntegrateWorkbench 保持一致。
+
+用法：
+  python data\\reintegrate.py                      # 默认交付目录 DSH成绩分析工作台\\app-0.2.1
+  python data\\reintegrate.py --app 某个app目录     # 指定任意 app 目录（含 node_modules），
+                                                   # 例如开发文件\\app（旧版 0.1.5 预览实例）
 """
+import argparse
 import os
 import re
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-P = os.path.join(ROOT, "DSH成绩分析工作台")
-DIST = os.path.join(P, "app-0.2.1", "node_modules", "@deepseek-ai", "dsh-web-frontend", "dist")
+DEFAULT_APP = os.path.join("DSH成绩分析工作台", "app-0.2.1")
+
+_ap = argparse.ArgumentParser()
+_ap.add_argument("--app", default=DEFAULT_APP, help="app 目录（含 node_modules），相对工作区或绝对路径")
+APPDIR = _ap.parse_args().app
+if not os.path.isabs(APPDIR):
+    APPDIR = os.path.join(ROOT, APPDIR)
+DIST = os.path.join(APPDIR, "node_modules", "@deepseek-ai", "dsh-web-frontend", "dist")
 INDEX = os.path.join(DIST, "index.html")
 TPL = os.path.join(DIST, "index.dsh-original.html")
 
@@ -43,6 +55,7 @@ BODY = (
 
 if not os.path.exists(INDEX):
     raise SystemExit("找不到前端 index.html: %s" % INDEX)
+print("目标 dist: %s" % DIST)
 
 # 原版模板：没有就从未被改过的 index.html 建一份
 cur = open(INDEX, encoding="utf-8").read()

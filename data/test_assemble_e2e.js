@@ -35,10 +35,12 @@ function loadJsdom() {
 const { JSDOM, VirtualConsole } = loadJsdom();
 
 const LS_KEY = 'dsh-grade-workbench-v6';
-const PAGE = path.join(ROOT, 'build', '_asm_page.html');
+// 带数据版页面放在哪：默认 build\_asm_page.html（用完即删），
+// 也可以用环境变量 ASM_PAGE 指到别处，免得 build\ 里留临时文件。
+const PAGE = process.env.ASM_PAGE || path.join(ROOT, 'build', '_asm_page.html');
 
 if (!fs.existsSync(PAGE)) {
-  console.log('[SKIP] 没有 build\\_asm_page.html。先生成带数据版：');
+  console.log('[SKIP] 没有带数据版页面（' + PAGE + '）。先生成：');
   console.log('       python data\\gen_home_html.py --with-data --out build\\_asm_page.html');
   process.exit(0);
 }

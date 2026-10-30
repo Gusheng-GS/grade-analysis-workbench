@@ -679,6 +679,12 @@ table.cmp th { color: var(--text-3); font-weight: 600; }
   margin-top: 6px; font-size: 12px; line-height: 1.65; color: var(--text-2);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
+.qcard .stem img.qi-c { max-height: 1.45em; width: auto; vertical-align: -0.2em; margin: 0 1px; }
+.qi-chip {
+  display: inline-block; padding: 0 4px; margin: 0 1px; border-radius: 3px;
+  background: var(--bg-subtle); color: var(--text-3); font-size: 10.5px;
+  vertical-align: 0.08em;
+}
 .qcard .qmeta { margin-top: 7px; display: flex; align-items: center; gap: 12px; font-size: 10.5px; color: var(--text-3); }
 .qcard .rate { display: flex; align-items: center; gap: 5px; }
 .qcard .rate .bar { width: 54px; height: 4px; border-radius: 2px; background: var(--bg-subtle); overflow: hidden; }
@@ -2422,24 +2428,31 @@ const ASM_POOL = [
     重点：这里必须写死 width/height 属性。Word 打开这种 .doc 时不认
     max-height:1.9em 之类的 CSS，但会照 width/height 属性按 px 排版；
     只给 CSS 的话它会把图按原始宽度拉满、高度却按 max-height 压扁，比例就毁了。 */
-function asmRich(t, q) {
+function asmRich(t, q, mode) {
   const imgs = (q && q.imgs) || {};
-  return esc(String(t == null ? '' : t)).replace(/\[图(\d+)\]/g, function (m, n) {
+  const card = mode === 'card';
+  return esc(String(t == null ? '' : t)).replace(/\[图([a-z]?\d+)\]/g, function (m, n) {
     const it = imgs[n];
     if (!it) return '<span class="qi-miss">〔图' + n + '〕</span>';
     const src = typeof it === 'string' ? it : it.u;
-    let cls = '', dw = 0, dh = 0;
+    let w = 0, h = 0, inline = true;
     if (typeof it === 'object' && it.w && it.h) {
-      if (it.w < 400 && it.h <= 160) {
-        // 句中的公式：统一按 24px 高显示（约 1.6 倍字号），宽按原比例算，不拉伸
-        cls = ' qi-in';
-        dh = 24;
-        dw = Math.max(6, Math.round(it.w * dh / it.h));
-      } else {
-        // 独立图片：按原尺寸显示，太宽时缩到 640（宽度上限，高度同比例）
-        dw = Math.min(it.w, 640);
-        dh = Math.max(1, Math.round(it.h * dw / it.w));
-      }
+      w = it.w;
+      h = it.h;
+      // 句中的公式 vs 独立的一张图：
+      //   公式（长度中等、偏扁）要跟着文字走；装置图 / 表格 / 曲线（高，或近正方形且够大）
+      //   要单独占一行。仅凭宽高判断不完美，但比"只按宽度上限"准得多。
+      inline = !(h >= 180 || (w >= 200 && w / h < 1.5));
+    }
+    if (!inline && card) return '<span class="qi-chip">图' + n + '</span>';
+    let dw = 0, dh = 0, cls = '';
+    if (inline) {
+      dh = card ? 14 : 24;                     // 约 1.5~2 个字高
+      dw = (w && h) ? Math.max(6, Math.round(w * dh / h)) : 0;
+      cls = card ? ' qi-in qi-c' : ' qi-in';
+    } else {
+      dw = Math.min(w || 320, 320);            // 卷面上最多 320px 宽，比例不变
+      dh = (w && h) ? Math.max(1, Math.round(h * dw / w)) : 0;
     }
     const size = dw && dh ? ' width="' + dw + '" height="' + dh + '"' : '';
     return '<img class="qi' + cls + '" src="' + src + '"' + size + ' alt="图' + n + '">';
@@ -2625,7 +2638,7 @@ function buildAsmDoc() {
     union.sort((x, y) => asmNumOf(x.no) - asmNumOf(y.no));
     body += '\n<div class="pp"><div class="pp-ans"><div class="h">答案与解析（' + union.length + ' 题）</div>' +
       union.map((q, i) => '<div class="pp-a"><div class="pa-h">' + (i + 1) + '. 【' + esc(q.no) + '】答案：' +
-        esc(q.ans || '—') + '</div>' + (q.detail ? '<div class="pa-d">' + asmRich(q.detail, q) + '</div>' : '') +
+        asmRich(q.ans || '—', q) + '</div>' + (q.detail ? '<div class="pa-d">' + asmRich(q.detail, q) + '</div>' : '') +
         '</div>').join('') + '</div></div>';
   }
   const head = '<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8" />\n'
@@ -2710,7 +2723,7 @@ function renderAsm() {
       let badge;
       if (oneStu) {
         const got = asmGot(oneStu, q);
-        if (got === null) badge = '<span class="who none">这次没这题的数据</span>';
+        if (got === null) badge = '<span class="who none">无这题数据</span>';
         else if (got >= q.score) badge = '<span class="who ok">✓ 他做对了</span>';
         else badge = '<span class="who bad">✗ 他丢了 ' + (Math.round((q.score - got) * 10) / 10) + ' 分</span>';
       } else if (hasStu) {
@@ -2723,7 +2736,7 @@ function renderAsm() {
         '<span class="qkp">' + esc(q.name) + '</span>' +
         '<span class="qtype">' + esc(q.type) + ' · ' + q.score + ' 分</span>' +
         '<span class="pick">✓</span></div>' +
-        '<div class="stem">' + esc(q.stem) + '</div>' +
+        '<div class="stem">' + asmRich(q.stem, q, 'card') + '</div>' +
         '<div class="qmeta">' +
         '<span class="rate ' + asmRateClass(q.rate) + '">全班 ' + q.rate.toFixed(1) + '%' +
         '<span class="bar"><i style="width:' + q.rate + '%"></i></span></span>' +

@@ -81,10 +81,15 @@ def split_answer(raw):
     else:
         ans, detail = ans_part.strip(), ""
     ans = re.sub(r"\s+", " ", ans)
-    ans = re.sub(r"\[图\d+\]", "〔图〕", ans)
+    # 答案行里的图也是"解析件"的图号，同样加 a 前缀，页面会把它们排成行内小图
+    ans = re.sub(r"\[图(\d+)\]", r"[图a\1]", ans)
     if len(ans) > 40:                       # 非选择题的答案是长句，截一段够用了
-        ans = ans[:40] + "…"
-    detail = re.sub(r"\[图\d+\]", "〔图〕", detail)
+        ans = ans[:40]
+        ans = re.sub(r"\[图[0-9a-z]*$", "", ans)   # 别把标记截成半截 [图a1
+        ans = ans.rstrip("，,、；; ") + "…"
+    # 解析里的图来自"解析件"那份 docx，两边的图号是各自编的，会撞车，
+    # 所以加 a 前缀（页面里认 [图aN]），免得卷面图 21 和解析图 21 串成一张。
+    detail = re.sub(r"\[图(\d+)\]", r"[图a\1]", detail)
     return ans, detail
 
 
@@ -145,6 +150,7 @@ def main():
 
         imgs = {}
         if not a.no_images:
+            # 题干/选项里的图：来自试卷那份 docx（paper-…）
             for n in sorted(set(int(x) for x in re.findall(r"\[图(\d+)\]", text))):
                 p = os.path.join(media, "paper-%03d-image%d.png" % (n, n))
                 if not os.path.exists(p):
@@ -154,6 +160,17 @@ def main():
                     uri, iw, ih = enc
                     # w/h 让页面决定这张图排成"句中的公式"还是"独立的一张图"
                     imgs[str(n)] = {"u": uri, "w": iw, "h": ih}
+                    n_img += 1
+                    img_kb += len(uri) / 1024
+            # 答案与解析里的图：来自解析件那份 docx（ans-…），键名加 a 前缀
+            for n in sorted(set(int(x) for x in re.findall(r"\[图a(\d+)\]", detail))):
+                p = os.path.join(media, "ans-%03d-image%d.png" % (n, n))
+                if not os.path.exists(p):
+                    continue
+                enc = encode_image(p, a.width, a.colors)
+                if enc:
+                    uri, iw, ih = enc
+                    imgs["a%d" % n] = {"u": uri, "w": iw, "h": ih}
                     n_img += 1
                     img_kb += len(uri) / 1024
         out.append({

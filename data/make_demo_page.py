@@ -204,12 +204,22 @@ with open(OUT, encoding="utf-8") as f:
     page = f.read()
 # 演示页要把题库正文掏空：那是老师试卷的真实题目/图片，不能出现在公开材料里。
 # 掏空后组卷台仍然能用（题目池、挑题、导出都在），只是小卷上只有一句题干。
-page, n_bank = re.subn(r"window\.__ASM_BANK__ = \[.*?\];", "window.__ASM_BANK__ = [];",
-                       page, flags=re.S)
-if n_bank:
+# 题库是一整行（build_bank.py 写出来的），按行替换最稳：
+# 不能用 re.subn(r"...\[.*?\];", flags=re.S) —— JSON 正文里本身就可能出现 "];"，
+# 那样会从中间截断，既没掏干净、还会把脚本改坏。
+_lines = page.split("\n")
+_dropped = 0
+for _i, _ln in enumerate(_lines):
+    if _ln.startswith("window.__ASM_BANK__ = "):
+        _lines[_i] = "window.__ASM_BANK__ = [];"
+        _dropped += 1
+page = "\n".join(_lines)
+if _dropped:
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write(page)
-    print("演示页已去掉题库正文（%d 处），避免公开材料里出现真实试题" % n_bank)
+    print("演示页已去掉题库正文（%d 处），避免公开材料里出现真实试题" % _dropped)
+if "data:image/png;base64," in page:
+    raise SystemExit("演示页里还有内联图片，题库没掏干净，先别发布")
 if "</head>" not in page:
     raise SystemExit("页面里找不到 </head>，注入失败")
 with open(SEED_JSON, encoding="utf-8") as f:

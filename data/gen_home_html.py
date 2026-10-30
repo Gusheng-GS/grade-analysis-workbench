@@ -2224,6 +2224,7 @@ function asmPostDocx(spec) {
     headers: { 'content-type': 'application/json', 'x-wb-token': U.token || '' },
     body: JSON.stringify({ spec: spec })
   }).then(function (res) {
+    if (res.status === 404) throw new Error('导出服务是旧版（没有 docx 接口），请关掉程序重新双击启动一次');
     if (!res.ok) {
       return res.text().then(function (t) {
         let msg = t.slice(0, 200);

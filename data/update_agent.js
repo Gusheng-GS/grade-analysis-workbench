@@ -268,6 +268,10 @@ const server = http.createServer((req, res) => {
   if (!tokenOk) {
     return send(res, 403, { ok: false, error: "token 不对" }, origin);
   }
+  // 带了 Origin 却不是我们的页面：拒绝（防止别的网页借用这个本机服务）
+  if (origin && ALLOWED_ORIGIN.indexOf(origin) < 0) {
+    return send(res, 403, { ok: false, error: "来源不被允许" }, origin);
+  }
 
   const url = new URL(req.url, "http://127.0.0.1");
 
